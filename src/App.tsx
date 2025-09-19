@@ -14,7 +14,7 @@ function App() {
   const [balanceData, setBalanceData] = useState<AccountBalance[]>([]);
   const [positionsData, setPositionsData] = useState<AccountPosition[]>([]);
   const [fileHistory, setFileHistory] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading] = useState(false);
   const [lastImport, setLastImport] = useState<{
     type: FileType | null;
     summary: any;

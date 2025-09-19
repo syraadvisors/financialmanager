@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Upload, CheckCircle, AlertTriangle, FileText, Clock } from 'lucide-react';
 import { FileType } from '../types/DataTypes';
 import { AppState } from '../types/NavigationTypes';
@@ -13,10 +13,7 @@ interface ImportPageProps {
 }
 
 const ImportPage: React.FC<ImportPageProps> = ({ appState, onDataImported }) => {
-  const [isProcessing, setIsProcessing] = useState(false);
-
   const handleDataImported = (data: any[], fileType: FileType, summary: any) => {
-    setIsProcessing(false);
     onDataImported(data, fileType, summary);
   };
 

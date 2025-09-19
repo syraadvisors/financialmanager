@@ -177,9 +177,9 @@ export const validateFileData = (data: any[], fileType: FileType): {
       const sharesStr = (row[7] || '0').toString().trim();
       const shares = sharesStr === '' ? 0 : parseFloat(sharesStr);
       
-      // Price at position 9
-      const priceStr = (row[9] || '0').toString().trim();
-      const price = priceStr === '' ? 0 : parseFloat(priceStr);
+      // Price at position 9 (not used in validation but kept for future use)
+      // const priceStr = (row[9] || '0').toString().trim();
+      // const price = priceStr === '' ? 0 : parseFloat(priceStr);
       
       // Market Value at position 11
       const marketValueStr = (row[11] || '0').toString().trim();
