@@ -3,13 +3,26 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
 root.render(
   <React.StrictMode>
-    <App />
+    <ErrorBoundary
+      level="page"
+      onError={(error, errorInfo) => {
+        // In a production app, you would send this to an error tracking service
+        console.error('Application Error:', error, errorInfo);
+
+        // Optional: Send to error tracking service
+        // Example: Sentry, LogRocket, Bugsnag, etc.
+        // errorTrackingService.captureException(error, { extra: errorInfo });
+      }}
+    >
+      <App />
+    </ErrorBoundary>
   </React.StrictMode>
 );
 

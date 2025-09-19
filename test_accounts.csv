@@ -1,0 +1,6 @@
+account_id,client_name,balance,fee_rate
+ACC001,Smith Family Trust,1500000,0.01
+ACC002,Johnson Retirement,2500000,0.0075
+ACC003,Williams Investment,750000,0.0125
+ACC004,Brown Foundation,5000000,0.005
+ACC005,Davis Holdings,3250000,0.0085
