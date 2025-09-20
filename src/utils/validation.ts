@@ -30,32 +30,100 @@ export const validateAccountNumber = (accountNumber: string): { valid: boolean; 
   return { valid: true };
 };
 
+// Smart file type detection that analyzes both column count and content
 export const detectFileTypeByColumnCount = (columnCount: number): FileType => {
-  if (columnCount === FileColumnCounts.BALANCE_FILE_COLUMNS) {
+  // More flexible detection - allow files with fewer columns than expected
+  // Balance files typically have 21 columns, but we only need specific ones
+  if (columnCount >= 7 && columnCount <= FileColumnCounts.BALANCE_FILE_COLUMNS) {
     return FileType.ACCOUNT_BALANCE;
-  } else if (columnCount === FileColumnCounts.POSITIONS_FILE_COLUMNS) {
+  }
+  // Positions files typically have 12 columns, but we only need specific ones
+  else if (columnCount >= 5 && columnCount <= FileColumnCounts.POSITIONS_FILE_COLUMNS) {
     return FileType.POSITIONS;
   }
+
+  // If ambiguous, try to detect based on common patterns
+  // Positions files usually have fewer columns than balance files
+  if (columnCount <= 12) {
+    return FileType.POSITIONS;
+  } else if (columnCount > 12) {
+    return FileType.ACCOUNT_BALANCE;
+  }
+
   return FileType.UNKNOWN;
+};
+
+// Enhanced detection that looks at actual data content
+export const smartDetectFileType = (data: any[]): FileType => {
+  if (!data || data.length === 0) {
+    return FileType.UNKNOWN;
+  }
+
+  const firstRow = data[0];
+  const columnCount = firstRow.length;
+
+  // Try column count first
+  let detectedType = detectFileTypeByColumnCount(columnCount);
+
+  // If still unknown or ambiguous, analyze content
+  if (detectedType === FileType.UNKNOWN ||
+      (columnCount >= 5 && columnCount <= 15)) { // Ambiguous range
+
+    // Sample a few rows to analyze content patterns
+    const sampleSize = Math.min(10, data.length);
+    let positionsIndicators = 0;
+    let balanceIndicators = 0;
+
+    for (let i = 0; i < sampleSize; i++) {
+      const row = data[i];
+
+      // Look for positions-specific patterns
+      // Positions files often have symbols in column 3 or 4
+      const possibleSymbol = (row[3] || row[4] || '').toString().trim();
+      if (possibleSymbol.length >= 1 && possibleSymbol.length <= 6 &&
+          /^[A-Z0-9]+$/.test(possibleSymbol)) {
+        positionsIndicators++;
+      }
+
+      // Look for balance-specific patterns
+      // Balance files often have larger numeric values in later columns
+      const laterColumns = row.slice(4).filter((col: any) => {
+        const num = parseFloat(col?.toString().replace(/[,$]/g, '') || '0');
+        return !isNaN(num) && Math.abs(num) > 1000; // Typical portfolio values
+      });
+      if (laterColumns.length > 0) {
+        balanceIndicators++;
+      }
+    }
+
+    // Make decision based on content analysis
+    if (positionsIndicators > balanceIndicators) {
+      return FileType.POSITIONS;
+    } else if (balanceIndicators > positionsIndicators) {
+      return FileType.ACCOUNT_BALANCE;
+    }
+  }
+
+  return detectedType;
 };
 
 export const extractRequiredColumnsFromArray = (data: any[], fileType: FileType): any[] => {
   if (fileType === FileType.ACCOUNT_BALANCE) {
     // Extract only the columns we need from balance file by position
     return data.map(row => {
-      // Ensure row has enough columns
-      while (row.length < APP_CONFIG.FILE.BALANCE_FILE_COLUMNS) {
-        row.push('');
-      }
-      
+      // Safely pad the row if needed, but don't require exact column count
+      const safeRow = [...row];
+
       const extracted: any = {};
       Object.entries(BalanceFileColumnPositions).forEach(([position, fieldName]) => {
         const pos = parseInt(position);
-        const value = (row[pos] || '').toString().trim();
-        
-        // Convert numeric fields
+        // Safely access column, even if it doesn't exist
+        const value = (safeRow[pos] || '').toString().trim();
+
+        // Convert numeric fields with better error handling
         if (fieldName === 'portfolioValue' || fieldName === 'totalCash') {
-          extracted[fieldName] = value === '' ? 0 : parseFloat(value);
+          const numericValue = value === '' ? 0 : parseFloat(value.replace(/[,$]/g, ''));
+          extracted[fieldName] = isNaN(numericValue) ? 0 : numericValue;
         } else {
           extracted[fieldName] = value;
         }
@@ -65,19 +133,19 @@ export const extractRequiredColumnsFromArray = (data: any[], fileType: FileType)
   } else if (fileType === FileType.POSITIONS) {
     // Extract all columns from positions file by position
     return data.map(row => {
-      // Ensure row has enough columns
-      while (row.length < APP_CONFIG.FILE.POSITIONS_FILE_COLUMNS) {
-        row.push('');
-      }
-      
+      // Safely pad the row if needed, but don't require exact column count
+      const safeRow = [...row];
+
       const extracted: any = {};
       Object.entries(PositionsFileColumnPositions).forEach(([position, fieldName]) => {
         const pos = parseInt(position);
-        const value = (row[pos] || '').toString().trim();
-        
-        // Convert numeric fields
+        // Safely access column, even if it doesn't exist
+        const value = (safeRow[pos] || '').toString().trim();
+
+        // Convert numeric fields with better error handling
         if (['numberOfShares', 'price', 'marketValue'].includes(fieldName)) {
-          extracted[fieldName] = value === '' ? 0 : parseFloat(value);
+          const numericValue = value === '' ? 0 : parseFloat(value.replace(/[,$]/g, ''));
+          extracted[fieldName] = isNaN(numericValue) ? 0 : numericValue;
         } else {
           extracted[fieldName] = value;
         }
@@ -85,7 +153,7 @@ export const extractRequiredColumnsFromArray = (data: any[], fileType: FileType)
       return extracted;
     });
   }
-  
+
   return data;
 };
 
