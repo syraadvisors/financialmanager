@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { PageType, NavigationItem, AppState } from '../types/NavigationTypes';
 import { APP_CONFIG } from '../config/constants';
+import UndoRedoControls from './UndoRedoControls';
 
 interface NavigationProps {
   currentPage: PageType;
@@ -241,6 +242,18 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
             </button>
           );
         })}
+      </div>
+
+      {/* Undo/Redo Controls */}
+      <div style={{
+        padding: '12px 20px',
+        borderTop: '1px solid #e0e0e0',
+      }}>
+        <UndoRedoControls
+          variant="vertical"
+          size="small"
+          showLabels={true}
+        />
       </div>
 
       {/* Status Footer */}

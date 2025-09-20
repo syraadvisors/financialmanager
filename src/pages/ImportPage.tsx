@@ -1,21 +1,18 @@
 import React from 'react';
 import { Upload, CheckCircle, AlertTriangle, FileText, Clock } from 'lucide-react';
 import { FileType } from '../types/DataTypes';
-import { AppState } from '../types/NavigationTypes';
+import { useAppContext } from '../contexts/AppContext';
 import CsvImporter from '../components/CsvImporter';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { CsvImportErrorFallback } from '../components/ErrorFallbacks';
 import { APP_CONFIG } from '../config/constants';
 
 interface ImportPageProps {
-  appState: AppState;
   onDataImported: (data: any[], fileType: FileType, summary: any) => void;
 }
 
-const ImportPage: React.FC<ImportPageProps> = ({ appState, onDataImported }) => {
-  const handleDataImported = (data: any[], fileType: FileType, summary: any) => {
-    onDataImported(data, fileType, summary);
-  };
+const ImportPage: React.FC<ImportPageProps> = ({ onDataImported }) => {
+  const { state } = useAppContext();
 
   const StatusCard: React.FC<{
     title: string;
@@ -161,31 +158,31 @@ const ImportPage: React.FC<ImportPageProps> = ({ appState, onDataImported }) => 
         }}>
           <StatusCard
             title="Balance Data"
-            count={appState.balanceData.length}
-            isLoaded={appState.balanceData.length > 0}
+            count={state.balanceData.length}
+            isLoaded={state.balanceData.length > 0}
             fileType={`Expected: ${APP_CONFIG.FILE.BALANCE_FILE_COLUMNS} columns`}
             lastUpdate={
-              appState.lastImport.type === 'ACCOUNT_BALANCE'
-                ? new Date(appState.lastImport.timestamp).toLocaleString()
+              state.lastImport.type === 'ACCOUNT_BALANCE'
+                ? new Date(state.lastImport.timestamp).toLocaleString()
                 : undefined
             }
           />
 
           <StatusCard
             title="Positions Data"
-            count={appState.positionsData.length}
-            isLoaded={appState.positionsData.length > 0}
+            count={state.positionsData.length}
+            isLoaded={state.positionsData.length > 0}
             fileType={`Expected: ${APP_CONFIG.FILE.POSITIONS_FILE_COLUMNS} columns`}
             lastUpdate={
-              appState.lastImport.type === 'POSITIONS'
-                ? new Date(appState.lastImport.timestamp).toLocaleString()
+              state.lastImport.type === 'POSITIONS'
+                ? new Date(state.lastImport.timestamp).toLocaleString()
                 : undefined
             }
           />
         </div>
 
         {/* Ready for Processing Message */}
-        {appState.balanceData.length > 0 && appState.positionsData.length > 0 && (
+        {state.balanceData.length > 0 && state.positionsData.length > 0 && (
           <div style={{
             padding: '20px',
             backgroundColor: '#e8f5e9',
@@ -243,7 +240,7 @@ const ImportPage: React.FC<ImportPageProps> = ({ appState, onDataImported }) => 
             />
           }
         >
-          <CsvImporter onDataImported={handleDataImported} />
+          <CsvImporter onDataImported={onDataImported} />
         </ErrorBoundary>
       </div>
 

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import './App.css';
-import { FileType, AccountBalance, AccountPosition } from './types/DataTypes';
-import { PageType, AppState } from './types/NavigationTypes';
+import { PageType } from './types/NavigationTypes';
+import { AppProvider, useAppContext } from './contexts/AppContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import Navigation from './components/Navigation';
 import OverviewPage from './pages/OverviewPage';
@@ -12,51 +12,9 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import HistoryPage from './pages/HistoryPage';
 import ErrorTest from './components/ErrorTest';
 
-function App() {
-  const [currentPage, setCurrentPage] = useState<PageType>(PageType.OVERVIEW);
-  const [balanceData, setBalanceData] = useState<AccountBalance[]>([]);
-  const [positionsData, setPositionsData] = useState<AccountPosition[]>([]);
-  const [fileHistory, setFileHistory] = useState<any[]>([]);
-  const [isLoading] = useState(false);
-  const [lastImport, setLastImport] = useState<{
-    type: FileType | null;
-    summary: any;
-    timestamp: string;
-  }>({ type: null, summary: null, timestamp: '' });
-
-  const handleDataImported = (data: any[], fileType: FileType, summary: any) => {
-    const timestamp = new Date().toLocaleString();
-
-    // Add to file history
-    const historyEntry = {
-      id: Date.now().toString(),
-      fileName: `${fileType.toLowerCase()}_data.csv`,
-      fileType: fileType,
-      importDate: timestamp,
-      recordCount: data.length,
-      summary: summary,
-    };
-
-    setFileHistory(prev => [historyEntry, ...prev.slice(0, 9)]); // Keep last 10
-
-    if (fileType === FileType.ACCOUNT_BALANCE) {
-      setBalanceData(data);
-      setLastImport({ type: fileType, summary, timestamp });
-    } else if (fileType === FileType.POSITIONS) {
-      setPositionsData(data);
-      setLastImport({ type: fileType, summary, timestamp });
-    }
-  };
-
-  // Create app state object
-  const appState: AppState = {
-    currentPage,
-    balanceData,
-    positionsData,
-    fileHistory,
-    isLoading,
-    lastImport,
-  };
+// Main App component that uses the context
+const AppContent: React.FC = () => {
+  const { state, setCurrentPage, handleDataImported } = useAppContext();
 
   const handleExportData = async (data: any[], format: 'csv' | 'json' | 'excel') => {
     try {
@@ -85,47 +43,39 @@ function App() {
   };
 
   const renderCurrentPage = () => {
-    switch (currentPage) {
+    switch (state.currentPage) {
       case PageType.IMPORT:
         return (
           <ImportPage
-            appState={appState}
             onDataImported={handleDataImported}
           />
         );
       case PageType.BALANCE_DATA:
         return (
           <BalanceDataPage
-            appState={appState}
             onExportData={handleExportData}
           />
         );
       case PageType.POSITIONS_DATA:
         return (
           <PositionsDataPage
-            appState={appState}
             onExportData={handleExportData}
           />
         );
       case PageType.ANALYTICS:
         return (
-          <AnalyticsPage
-            appState={appState}
-          />
+          <AnalyticsPage />
         );
       case PageType.HISTORY:
         return (
-          <HistoryPage
-            appState={appState}
-          />
+          <HistoryPage />
         );
       case PageType.OVERVIEW:
       default:
         return (
           <OverviewPage
-            appState={appState}
             onExportData={(format) => {
-              const allData = [...balanceData, ...positionsData];
+              const allData = [...state.balanceData, ...state.positionsData];
               handleExportData(allData, format);
             }}
           />
@@ -137,9 +87,9 @@ function App() {
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       {/* Navigation Sidebar */}
       <Navigation
-        currentPage={currentPage}
+        currentPage={state.currentPage}
         onPageChange={setCurrentPage}
-        appState={appState}
+        appState={state}
       />
 
       {/* Main Content */}
@@ -155,6 +105,15 @@ function App() {
       </div>
     </div>
   );
-}
+};
+
+// Root App component with Context Provider
+const App: React.FC = () => {
+  return (
+    <AppProvider enablePersistence={true}>
+      <AppContent />
+    </AppProvider>
+  );
+};
 
 export default App;

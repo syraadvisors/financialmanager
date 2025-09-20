@@ -1,15 +1,14 @@
 import React, { useMemo } from 'react';
 import { BarChart3, PieChart, TrendingUp, TrendingDown, DollarSign, Users, Target, Activity } from 'lucide-react';
-import { AppState } from '../types/NavigationTypes';
+import { useAppContext } from '../contexts/AppContext';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { DataProcessingErrorFallback } from '../components/ErrorFallbacks';
 
-interface AnalyticsPageProps {
-  appState: AppState;
-}
+interface AnalyticsPageProps {}
 
-const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ appState }) => {
-  const { balanceData, positionsData } = appState;
+const AnalyticsPage: React.FC<AnalyticsPageProps> = () => {
+  const { state } = useAppContext();
+  const { balanceData, positionsData } = state;
 
   // Calculate analytics
   const analytics = useMemo(() => {

@@ -1,17 +1,17 @@
 import React from 'react';
 import { TrendingUp, DollarSign, Users, AlertCircle } from 'lucide-react';
-import { AppState } from '../types/NavigationTypes';
+import { useAppContext } from '../contexts/AppContext';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { DataProcessingErrorFallback } from '../components/ErrorFallbacks';
 import ExportButton from '../components/ExportButton';
 
 interface OverviewPageProps {
-  appState: AppState;
   onExportData?: (format: 'csv' | 'json' | 'excel') => void;
 }
 
-const OverviewPage: React.FC<OverviewPageProps> = ({ appState, onExportData }) => {
-  const { balanceData, positionsData, lastImport } = appState;
+const OverviewPage: React.FC<OverviewPageProps> = ({ onExportData }) => {
+  const { state } = useAppContext();
+  const { balanceData, positionsData, lastImport } = state;
 
   // Calculate summary statistics
   const totalPortfolioValue = balanceData.reduce((sum, account) =>

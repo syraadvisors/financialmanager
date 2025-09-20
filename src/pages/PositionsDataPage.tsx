@@ -1,16 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Eye, EyeOff, SortAsc, SortDesc, TrendingUp, DollarSign } from 'lucide-react';
-import { AppState } from '../types/NavigationTypes';
+import { useAppContext } from '../contexts/AppContext';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { DataProcessingErrorFallback } from '../components/ErrorFallbacks';
 import ExportButton from '../components/ExportButton';
 
 interface PositionsDataPageProps {
-  appState: AppState;
   onExportData?: (data: any[], format: 'csv' | 'excel') => void;
 }
 
-const PositionsDataPage: React.FC<PositionsDataPageProps> = ({ appState, onExportData }) => {
+const PositionsDataPage: React.FC<PositionsDataPageProps> = ({ onExportData }) => {
+  const { state } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<string>('marketValue');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -19,7 +19,7 @@ const PositionsDataPage: React.FC<PositionsDataPageProps> = ({ appState, onExpor
   const [filterType, setFilterType] = useState<string>('all');
   const itemsPerPage = 25;
 
-  const { positionsData } = appState;
+  const { positionsData } = state;
 
   // Get unique security types for filter
   const securityTypes = useMemo(() => {
@@ -53,8 +53,8 @@ const PositionsDataPage: React.FC<PositionsDataPageProps> = ({ appState, onExpor
 
     // Sort data
     filtered.sort((a, b) => {
-      const aValue = a[sortField];
-      const bValue = b[sortField];
+      const aValue = a[sortField as keyof typeof a];
+      const bValue = b[sortField as keyof typeof b];
 
       if (typeof aValue === 'number' && typeof bValue === 'number') {
         return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
@@ -378,7 +378,7 @@ const PositionsDataPage: React.FC<PositionsDataPageProps> = ({ appState, onExpor
                     }}
                   >
                     {visibleColumns.map(column => {
-                      const value = position[column.key];
+                      const value = position[column.key as keyof typeof position];
                       let displayValue = value;
 
                       // Format based on column type

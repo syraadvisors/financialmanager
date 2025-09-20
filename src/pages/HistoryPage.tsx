@@ -1,13 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { History, FileText, Download, Upload, Calendar, Filter, Search, Eye } from 'lucide-react';
-import { AppState } from '../types/NavigationTypes';
+import { useAppContext } from '../contexts/AppContext';
 import { FileType } from '../types/DataTypes';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { DataProcessingErrorFallback } from '../components/ErrorFallbacks';
 
-interface HistoryPageProps {
-  appState: AppState;
-}
+interface HistoryPageProps {}
 
 interface HistoryEntry {
   id: string;
@@ -19,14 +17,15 @@ interface HistoryEntry {
   action?: 'import' | 'export';
 }
 
-const HistoryPage: React.FC<HistoryPageProps> = ({ appState }) => {
+const HistoryPage: React.FC<HistoryPageProps> = () => {
+  const { state } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'balance' | 'positions' | 'export'>('all');
   const [sortField, setSortField] = useState<'date' | 'type' | 'records'>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [selectedEntry, setSelectedEntry] = useState<HistoryEntry | null>(null);
 
-  const { fileHistory } = appState;
+  const { fileHistory } = state;
 
   // Convert fileHistory to HistoryEntry format and add mock export entries for demo
   const allHistory = useMemo(() => {

@@ -1,16 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Eye, EyeOff, SortAsc, SortDesc } from 'lucide-react';
-import { AppState } from '../types/NavigationTypes';
+import { useAppContext } from '../contexts/AppContext';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { DataProcessingErrorFallback } from '../components/ErrorFallbacks';
 import ExportButton from '../components/ExportButton';
 
 interface BalanceDataPageProps {
-  appState: AppState;
   onExportData?: (data: any[], format: 'csv' | 'excel') => void;
 }
 
-const BalanceDataPage: React.FC<BalanceDataPageProps> = ({ appState, onExportData }) => {
+const BalanceDataPage: React.FC<BalanceDataPageProps> = ({ onExportData }) => {
+  const { state } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<string>('accountNumber');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -18,7 +18,7 @@ const BalanceDataPage: React.FC<BalanceDataPageProps> = ({ appState, onExportDat
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 25;
 
-  const { balanceData } = appState;
+  const { balanceData } = state;
 
   // Filter and sort data
   const processedData = useMemo(() => {
@@ -34,8 +34,8 @@ const BalanceDataPage: React.FC<BalanceDataPageProps> = ({ appState, onExportDat
 
     // Sort data
     filtered.sort((a, b) => {
-      const aValue = a[sortField];
-      const bValue = b[sortField];
+      const aValue = a[sortField as keyof typeof a];
+      const bValue = b[sortField as keyof typeof b];
 
       if (typeof aValue === 'number' && typeof bValue === 'number') {
         return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
