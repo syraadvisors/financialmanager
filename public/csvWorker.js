@@ -1,0 +1,403 @@
+/* eslint-disable no-restricted-globals */
+// CSV Processing Web Worker
+// This worker handles heavy CSV parsing and validation operations
+
+// Import Papa Parse from CDN for the worker
+importScripts('https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js');
+
+// Configuration constants (mirrored from main app)
+const FILE_CONFIG = {
+  BALANCE_FILE_COLUMNS: 21,
+  POSITIONS_FILE_COLUMNS: 12,
+  PREVIEW_ROWS: 5,
+  MAX_ERRORS_DISPLAYED: 10,
+  MAX_WARNINGS_DISPLAYED: 10,
+  // Minimum columns required for each file type
+  MIN_BALANCE_COLUMNS: 7,
+  MIN_POSITIONS_COLUMNS: 5,
+};
+
+const COLUMN_MAPPINGS = {
+  BALANCE_FILE: {
+    0: 'asOfBusinessDate',
+    1: 'accountNumber',
+    2: 'accountName',
+    4: 'portfolioValue',
+    6: 'totalCash',
+  },
+  POSITIONS_FILE: {
+    0: 'asOfBusinessDate',
+    1: 'accountNumber',
+    2: 'accountName',
+    3: 'symbol',
+    4: 'securityType',
+    5: 'securityDescription',
+    6: 'accountingRuleCode',
+    7: 'numberOfShares',
+    8: 'longShort',
+    9: 'price',
+    10: 'dateOfPrice',
+    11: 'marketValue',
+  },
+};
+
+// Utility functions - more flexible file type detection
+function detectFileTypeByColumnCount(columnCount) {
+  // More flexible detection - allow files with fewer columns than expected
+  // Balance files typically have 21 columns, but we only need specific ones
+  if (columnCount >= FILE_CONFIG.MIN_BALANCE_COLUMNS && columnCount <= FILE_CONFIG.BALANCE_FILE_COLUMNS) {
+    return 'ACCOUNT_BALANCE';
+  }
+  // Positions files typically have 12 columns, but we only need specific ones
+  else if (columnCount >= FILE_CONFIG.MIN_POSITIONS_COLUMNS && columnCount <= FILE_CONFIG.POSITIONS_FILE_COLUMNS) {
+    return 'POSITIONS';
+  }
+
+  // If ambiguous, try to detect based on common patterns
+  // Positions files usually have fewer columns than balance files
+  if (columnCount <= 12) {
+    return 'POSITIONS';
+  } else if (columnCount > 12) {
+    return 'ACCOUNT_BALANCE';
+  }
+
+  return 'UNKNOWN';
+}
+
+function extractRequiredColumns(data, fileType) {
+  const columnMapping = fileType === 'ACCOUNT_BALANCE'
+    ? COLUMN_MAPPINGS.BALANCE_FILE
+    : COLUMN_MAPPINGS.POSITIONS_FILE;
+
+  return data.map(row => {
+    // Work with the actual row length - don't force padding
+    const safeRow = [...row];
+
+    const extracted = {};
+    Object.entries(columnMapping).forEach(([position, fieldName]) => {
+      const pos = parseInt(position);
+      // Safely access column, even if it doesn't exist
+      const value = (safeRow[pos] || '').toString().trim();
+
+      // Convert numeric fields with better error handling
+      if (fileType === 'ACCOUNT_BALANCE' && (fieldName === 'portfolioValue' || fieldName === 'totalCash')) {
+        const numericValue = value === '' ? 0 : parseFloat(value.replace(/[,$]/g, ''));
+        extracted[fieldName] = isNaN(numericValue) ? 0 : numericValue;
+      } else if (fileType === 'POSITIONS' && ['numberOfShares', 'price', 'marketValue'].includes(fieldName)) {
+        const numericValue = value === '' ? 0 : parseFloat(value.replace(/[,$]/g, ''));
+        extracted[fieldName] = isNaN(numericValue) ? 0 : numericValue;
+      } else {
+        extracted[fieldName] = value;
+      }
+    });
+
+    return extracted;
+  });
+}
+
+function validateData(data, fileType) {
+  const errors = [];
+  const warnings = [];
+  let validRowCount = 0;
+  const uniqueAccounts = new Set();
+  const dates = new Set();
+
+  if (!data || data.length === 0) {
+    errors.push('No data found in file');
+    return {
+      valid: false,
+      errors,
+      warnings,
+      validRowCount: 0,
+      summary: { totalRows: 0, uniqueAccounts: 0 }
+    };
+  }
+
+  // Process each row in chunks to avoid blocking
+  const processChunk = (startIndex, chunkSize) => {
+    const endIndex = Math.min(startIndex + chunkSize, data.length);
+
+    for (let i = startIndex; i < endIndex; i++) {
+      const row = data[i];
+      const rowNum = i + 1;
+
+      // Work with actual row length - no need to pad to exact column count
+      const actualColumns = row.length;
+
+      // Validate account number
+      const accountNumber = (row[1] || '').toString().trim();
+      if (!accountNumber) {
+        warnings.push(`Row ${rowNum}: Empty account number`);
+        continue;
+      }
+
+      // Basic account number validation
+      const cleaned = accountNumber.replace(/\s/g, '');
+      if (!/^\d{8,9}$/.test(cleaned) || cleaned.startsWith('0')) {
+        if (errors.length < FILE_CONFIG.MAX_ERRORS_DISPLAYED) {
+          errors.push(`Row ${rowNum}: Invalid account number format (${accountNumber})`);
+        }
+        continue;
+      }
+
+      uniqueAccounts.add(accountNumber);
+
+      // Collect dates
+      const dateValue = (row[0] || '').toString().trim();
+      if (dateValue) {
+        dates.add(dateValue);
+      }
+
+      // Type-specific validation
+      if (fileType === 'ACCOUNT_BALANCE') {
+        const portfolioValue = parseFloat((row[4] || '0').toString().replace(/[,$]/g, '')) || 0;
+        const totalCash = parseFloat((row[6] || '0').toString().replace(/[,$]/g, '')) || 0;
+
+        if (portfolioValue === 0 && totalCash === 0) {
+          if (warnings.length < FILE_CONFIG.MAX_WARNINGS_DISPLAYED) {
+            warnings.push(`Row ${rowNum}: No balance values found`);
+          }
+          continue;
+        }
+      } else if (fileType === 'POSITIONS') {
+        const shares = parseFloat((row[7] || '0').toString().replace(/[,]/g, '')) || 0;
+        const marketValue = parseFloat((row[11] || '0').toString().replace(/[,$]/g, '')) || 0;
+
+        if (shares === 0 && marketValue === 0) {
+          if (warnings.length < FILE_CONFIG.MAX_WARNINGS_DISPLAYED) {
+            warnings.push(`Row ${rowNum}: Invalid position data`);
+          }
+          continue;
+        }
+      }
+
+      validRowCount++;
+    }
+
+    return endIndex < data.length;
+  };
+
+  // Process data in chunks to prevent blocking
+  const chunkSize = 1000;
+  let currentIndex = 0;
+
+  const processNextChunk = () => {
+    if (processChunk(currentIndex, chunkSize)) {
+      currentIndex += chunkSize;
+      // Post progress update
+      self.postMessage({
+        type: 'progress',
+        progress: (currentIndex / data.length) * 100,
+        processed: currentIndex,
+        total: data.length
+      });
+      // Schedule next chunk
+      setTimeout(processNextChunk, 0);
+    } else {
+      // Validation complete
+      const dateArray = Array.from(dates).sort();
+      const dateRange = dateArray.length > 0
+        ? (dateArray.length === 1 ? dateArray[0] : `${dateArray[0]} to ${dateArray[dateArray.length - 1]}`)
+        : undefined;
+
+      const result = {
+        valid: errors.length === 0,
+        errors: errors.slice(0, FILE_CONFIG.MAX_ERRORS_DISPLAYED),
+        warnings: warnings.slice(0, FILE_CONFIG.MAX_WARNINGS_DISPLAYED),
+        validRowCount,
+        summary: {
+          totalRows: data.length,
+          uniqueAccounts: uniqueAccounts.size,
+          dateRange
+        }
+      };
+
+      self.postMessage({
+        type: 'validation_complete',
+        result
+      });
+    }
+  };
+
+  processNextChunk();
+}
+
+// Main message handler
+self.onmessage = function(e) {
+  const { type, data: messageData } = e.data;
+
+  try {
+    switch (type) {
+      case 'parse_csv':
+        const { fileContent, fileName } = messageData;
+
+        self.postMessage({
+          type: 'parsing_started',
+          fileName
+        });
+
+        // Parse CSV with Papa Parse
+        Papa.parse(fileContent, {
+          complete: function(results) {
+            if (!results.data || results.data.length === 0) {
+              self.postMessage({
+                type: 'error',
+                error: 'No data found in file'
+              });
+              return;
+            }
+
+            const columnCount = results.data[0].length;
+            const fileType = detectFileTypeByColumnCount(columnCount);
+
+            if (fileType === 'UNKNOWN') {
+              self.postMessage({
+                type: 'error',
+                error: `Unable to determine file type. File has ${columnCount} columns.`
+              });
+              return;
+            }
+
+            self.postMessage({
+              type: 'parsing_complete',
+              result: {
+                data: results.data,
+                fileType,
+                columnCount,
+                rowCount: results.data.length
+              }
+            });
+
+            // Start validation
+            validateData(results.data, fileType);
+          },
+          header: false,
+          skipEmptyLines: true,
+          error: function(error) {
+            self.postMessage({
+              type: 'error',
+              error: `CSV parsing error: ${error.message}`
+            });
+          }
+        });
+        break;
+
+      case 'extract_columns':
+        const { rawData, fileType } = messageData;
+
+        self.postMessage({
+          type: 'extraction_started'
+        });
+
+        // Extract columns in chunks to avoid blocking
+        const extractInChunks = (data, type, chunkSize = 1000) => {
+          let processed = 0;
+          const results = [];
+
+          const processChunk = () => {
+            const end = Math.min(processed + chunkSize, data.length);
+            const chunk = data.slice(processed, end);
+            const extractedChunk = extractRequiredColumns(chunk, type);
+
+            results.push(...extractedChunk);
+            processed = end;
+
+            if (processed < data.length) {
+              self.postMessage({
+                type: 'extraction_progress',
+                progress: (processed / data.length) * 100,
+                processed,
+                total: data.length
+              });
+              setTimeout(processChunk, 0);
+            } else {
+              self.postMessage({
+                type: 'extraction_complete',
+                result: {
+                  extractedData: results,
+                  preview: results.slice(0, FILE_CONFIG.PREVIEW_ROWS)
+                }
+              });
+            }
+          };
+
+          processChunk();
+        };
+
+        extractInChunks(rawData, fileType);
+        break;
+
+      case 'sort_data':
+        const { data: sortData, field, direction } = messageData;
+
+        self.postMessage({
+          type: 'sorting_started'
+        });
+
+        // Sort in chunks for large datasets
+        const sortedData = [...sortData].sort((a, b) => {
+          const aValue = a[field];
+          const bValue = b[field];
+
+          if (typeof aValue === 'number' && typeof bValue === 'number') {
+            return direction === 'asc' ? aValue - bValue : bValue - aValue;
+          }
+
+          const aStr = String(aValue || '').toLowerCase();
+          const bStr = String(bValue || '').toLowerCase();
+
+          return direction === 'asc'
+            ? aStr.localeCompare(bStr)
+            : bStr.localeCompare(aStr);
+        });
+
+        self.postMessage({
+          type: 'sorting_complete',
+          result: sortedData
+        });
+        break;
+
+      case 'filter_data':
+        const { data: filterData, filters } = messageData;
+
+        self.postMessage({
+          type: 'filtering_started'
+        });
+
+        const filteredData = filterData.filter(item => {
+          return Object.entries(filters).every(([key, value]) => {
+            if (!value) return true;
+
+            const itemValue = item[key];
+            if (typeof itemValue === 'string' && typeof value === 'string') {
+              return itemValue.toLowerCase().includes(value.toLowerCase());
+            }
+
+            return itemValue === value;
+          });
+        });
+
+        self.postMessage({
+          type: 'filtering_complete',
+          result: filteredData
+        });
+        break;
+
+      default:
+        self.postMessage({
+          type: 'error',
+          error: `Unknown message type: ${type}`
+        });
+    }
+  } catch (error) {
+    self.postMessage({
+      type: 'error',
+      error: `Worker error: ${error.message}`
+    });
+  }
+};
+
+// Handle worker initialization
+self.postMessage({
+  type: 'worker_ready'
+});

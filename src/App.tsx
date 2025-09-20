@@ -1,20 +1,27 @@
-import React from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import './App.css';
 import { PageType } from './types/NavigationTypes';
 import { AppProvider, useAppContext } from './contexts/AppContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import Navigation from './components/Navigation';
-import OverviewPage from './pages/OverviewPage';
-import ImportPage from './pages/ImportPage';
-import BalanceDataPage from './pages/BalanceDataPage';
-import PositionsDataPage from './pages/PositionsDataPage';
-import AnalyticsPage from './pages/AnalyticsPage';
-import HistoryPage from './pages/HistoryPage';
 import ErrorTest from './components/ErrorTest';
+import LoadingSkeleton from './components/LoadingSkeleton';
+
+// Lazy load all page components for code splitting
+const OverviewPage = lazy(() => import('./pages/OverviewPage'));
+const ImportPage = lazy(() => import('./pages/ImportPage'));
+const BalanceDataPage = lazy(() => import('./pages/BalanceDataPage'));
+const PositionsDataPage = lazy(() => import('./pages/PositionsDataPage'));
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
+const HistoryPage = lazy(() => import('./pages/HistoryPage'));
+const PerformanceDashboard = lazy(() => import('./components/PerformanceDashboard'));
 
 // Main App component that uses the context
 const AppContent: React.FC = () => {
   const { state, setCurrentPage, handleDataImported } = useAppContext();
+  const [showPerformanceDashboard, setShowPerformanceDashboard] = useState(
+    process.env.NODE_ENV === 'development'
+  );
 
   const handleExportData = async (data: any[], format: 'csv' | 'json' | 'excel') => {
     try {
@@ -101,8 +108,46 @@ const AppContent: React.FC = () => {
           </ErrorBoundary>
         )}
 
-        {renderCurrentPage()}
+        <Suspense fallback={<LoadingSkeleton type="page" />}>
+          {renderCurrentPage()}
+        </Suspense>
       </div>
+
+      {/* Performance Dashboard */}
+      <Suspense fallback={null}>
+        <PerformanceDashboard
+          isVisible={showPerformanceDashboard}
+          position="bottom-right"
+        />
+      </Suspense>
+
+      {/* Toggle button for performance dashboard */}
+      <button
+        onClick={() => setShowPerformanceDashboard(!showPerformanceDashboard)}
+        style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: showPerformanceDashboard ? '340px' : '20px',
+          zIndex: 999,
+          padding: '8px',
+          backgroundColor: '#2196f3',
+          color: 'white',
+          border: 'none',
+          borderRadius: '50%',
+          cursor: 'pointer',
+          fontSize: '12px',
+          width: '36px',
+          height: '36px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+          transition: 'right 0.3s ease',
+        }}
+        title="Toggle Performance Dashboard"
+      >
+        📊
+      </button>
     </div>
   );
 };
