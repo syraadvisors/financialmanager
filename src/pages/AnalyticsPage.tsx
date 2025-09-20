@@ -1,8 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { BarChart3, PieChart, TrendingUp, TrendingDown, DollarSign, Users, Target, Activity } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { DataProcessingErrorFallback } from '../components/ErrorFallbacks';
+import LoadingSkeleton from '../components/LoadingSkeleton';
 
 interface AnalyticsPageProps {}
 
@@ -10,92 +11,144 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = () => {
   const { state } = useAppContext();
   const { balanceData, positionsData } = state;
 
-  // Calculate analytics
+  // Progressive loading state
+  const [isCalculatingAnalytics, setIsCalculatingAnalytics] = useState(true);
+  const [calculationProgress, setCalculationProgress] = useState(0);
+
+  // Calculate analytics with progressive loading
   const analytics = useMemo(() => {
-    // Account Analytics
-    const totalAccounts = new Set([
-      ...balanceData.map(b => b.accountNumber),
-      ...positionsData.map(p => p.accountNumber)
-    ]).size;
+    // Show loading state for heavy calculations
+    setIsCalculatingAnalytics(true);
+    setCalculationProgress(0);
 
-    const totalPortfolioValue = balanceData.reduce((sum, account) =>
-      sum + (parseFloat(account.portfolioValue?.toString() || '0') || 0), 0
-    );
+    const startTime = performance.now();
 
-    const totalCash = balanceData.reduce((sum, account) =>
-      sum + (parseFloat(account.totalCash?.toString() || '0') || 0), 0
-    );
+    // Progressive calculation steps
+    const calculateBaseData = () => {
+      setCalculationProgress(20);
+      // Account Analytics
+      const totalAccounts = new Set([
+        ...balanceData.map(b => b.accountNumber),
+        ...positionsData.map(p => p.accountNumber)
+      ]).size;
 
-    const totalPositionsValue = positionsData.reduce((sum, position) =>
-      sum + (parseFloat(position.marketValue?.toString() || '0') || 0), 0
-    );
+      const totalPortfolioValue = balanceData.reduce((sum, account) =>
+        sum + (parseFloat(account.portfolioValue?.toString() || '0') || 0), 0
+      );
 
-    // Top Accounts by Portfolio Value
-    const topAccounts = [...balanceData]
-      .sort((a, b) => (parseFloat(b.portfolioValue?.toString() || '0') || 0) - (parseFloat(a.portfolioValue?.toString() || '0') || 0))
-      .slice(0, 10)
-      .map(account => ({
-        accountNumber: account.accountNumber,
-        accountName: account.accountName,
-        value: parseFloat(account.portfolioValue?.toString() || '0') || 0,
-        cash: parseFloat(account.totalCash?.toString() || '0') || 0,
-      }));
+      const totalCash = balanceData.reduce((sum, account) =>
+        sum + (parseFloat(account.totalCash?.toString() || '0') || 0), 0
+      );
 
-    // Security Type Distribution
-    const securityTypeDistribution = positionsData.reduce((acc, position) => {
-      const type = position.securityType || 'Unknown';
-      const value = parseFloat(position.marketValue?.toString() || '0') || 0;
-      if (!acc[type]) {
-        acc[type] = { count: 0, value: 0 };
-      }
-      acc[type].count += 1;
-      acc[type].value += value;
-      return acc;
-    }, {} as Record<string, { count: number; value: number }>);
+      const totalPositionsValue = positionsData.reduce((sum, position) =>
+        sum + (parseFloat(position.marketValue?.toString() || '0') || 0), 0
+      );
 
-    // Top Holdings by Market Value
-    const topHoldings = [...positionsData]
-      .sort((a, b) => (parseFloat(b.marketValue?.toString() || '0') || 0) - (parseFloat(a.marketValue?.toString() || '0') || 0))
-      .slice(0, 10)
-      .map(position => ({
-        symbol: position.symbol,
-        description: position.securityDescription,
-        type: position.securityType,
-        value: parseFloat(position.marketValue?.toString() || '0') || 0,
-        shares: parseFloat(position.numberOfShares?.toString() || '0') || 0,
-        price: parseFloat(position.price?.toString() || '0') || 0,
-      }));
-
-    // Portfolio Allocation (Cash vs Investments)
-    const cashPercentage = totalPortfolioValue > 0 ? (totalCash / totalPortfolioValue) * 100 : 0;
-    const investmentPercentage = 100 - cashPercentage;
-
-    // Account Size Distribution
-    const accountSizeRanges = {
-      'Under $100K': balanceData.filter(a => (parseFloat(a.portfolioValue?.toString() || '0') || 0) < 100000).length,
-      '$100K - $500K': balanceData.filter(a => {
-        const value = parseFloat(a.portfolioValue?.toString() || '0') || 0;
-        return value >= 100000 && value < 500000;
-      }).length,
-      '$500K - $1M': balanceData.filter(a => {
-        const value = parseFloat(a.portfolioValue?.toString() || '0') || 0;
-        return value >= 500000 && value < 1000000;
-      }).length,
-      '$1M+': balanceData.filter(a => (parseFloat(a.portfolioValue?.toString() || '0') || 0) >= 1000000).length,
+      return { totalAccounts, totalPortfolioValue, totalCash, totalPositionsValue };
     };
 
-    return {
-      totalAccounts,
-      totalPortfolioValue,
-      totalCash,
-      totalPositionsValue,
-      topAccounts,
-      securityTypeDistribution,
-      topHoldings,
-      cashPercentage,
-      investmentPercentage,
-      accountSizeRanges,
+    const calculateTopAccounts = (baseData: any) => {
+        setCalculationProgress(40);
+        // Top Accounts by Portfolio Value
+        const topAccounts = [...balanceData]
+          .sort((a, b) => (parseFloat(b.portfolioValue?.toString() || '0') || 0) - (parseFloat(a.portfolioValue?.toString() || '0') || 0))
+          .slice(0, 10)
+          .map(account => ({
+            accountNumber: account.accountNumber,
+            accountName: account.accountName,
+            value: parseFloat(account.portfolioValue?.toString() || '0') || 0,
+            cash: parseFloat(account.totalCash?.toString() || '0') || 0,
+          }));
+
+        return { ...baseData, topAccounts };
     };
+
+    const calculateSecurityDistribution = (baseData: any) => {
+      setCalculationProgress(60);
+      // Security Type Distribution
+      const securityTypeDistribution = positionsData.reduce((acc, position) => {
+        const type = position.securityType || 'Unknown';
+        const value = parseFloat(position.marketValue?.toString() || '0') || 0;
+        if (!acc[type]) {
+          acc[type] = { count: 0, value: 0 };
+        }
+        acc[type].count += 1;
+        acc[type].value += value;
+        return acc;
+      }, {} as Record<string, { count: number; value: number }>);
+
+      return { ...baseData, securityTypeDistribution };
+    };
+
+    const calculateTopHoldings = (baseData: any) => {
+      setCalculationProgress(80);
+      // Top Holdings by Market Value
+      const topHoldings = [...positionsData]
+        .sort((a, b) => (parseFloat(b.marketValue?.toString() || '0') || 0) - (parseFloat(a.marketValue?.toString() || '0') || 0))
+        .slice(0, 10)
+        .map(position => ({
+          symbol: position.symbol,
+          description: position.securityDescription,
+          type: position.securityType,
+          value: parseFloat(position.marketValue?.toString() || '0') || 0,
+          shares: parseFloat(position.numberOfShares?.toString() || '0') || 0,
+          price: parseFloat(position.price?.toString() || '0') || 0,
+        }));
+
+      return { ...baseData, topHoldings };
+    };
+
+    const calculateFinalMetrics = (baseData: any) => {
+      setCalculationProgress(100);
+      // Final calculations
+      const { totalPortfolioValue, totalCash } = baseData;
+
+      // Portfolio Allocation (Cash vs Investments)
+      const cashPercentage = totalPortfolioValue > 0 ? (totalCash / totalPortfolioValue) * 100 : 0;
+      const investmentPercentage = 100 - cashPercentage;
+
+      // Account Size Distribution
+      const accountSizeRanges = {
+        'Under $100K': balanceData.filter(a => (parseFloat(a.portfolioValue?.toString() || '0') || 0) < 100000).length,
+        '$100K - $500K': balanceData.filter(a => {
+          const value = parseFloat(a.portfolioValue?.toString() || '0') || 0;
+          return value >= 100000 && value < 500000;
+        }).length,
+        '$500K - $1M': balanceData.filter(a => {
+          const value = parseFloat(a.portfolioValue?.toString() || '0') || 0;
+          return value >= 500000 && value < 1000000;
+        }).length,
+        '$1M+': balanceData.filter(a => (parseFloat(a.portfolioValue?.toString() || '0') || 0) >= 1000000).length,
+      };
+
+      return {
+        ...baseData,
+        cashPercentage,
+        investmentPercentage,
+        accountSizeRanges,
+      };
+    };
+
+    // Execute steps progressively
+    let result = calculateBaseData();
+    result = calculateTopAccounts(result);
+    result = calculateSecurityDistribution(result);
+    result = calculateTopHoldings(result);
+    result = calculateFinalMetrics(result);
+
+    // Simulate minimum loading time for better UX
+    const elapsedTime = performance.now() - startTime;
+    const minLoadingTime = 500; // 500ms minimum
+
+    if (elapsedTime < minLoadingTime) {
+      setTimeout(() => {
+        setIsCalculatingAnalytics(false);
+      }, minLoadingTime - elapsedTime);
+    } else {
+      setIsCalculatingAnalytics(false);
+    }
+
+    return result;
   }, [balanceData, positionsData]);
 
   const formatCurrency = (amount: number) =>
@@ -223,6 +276,75 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = () => {
     );
   }
 
+  // Show loading skeleton while calculating
+  if (isCalculatingAnalytics) {
+    return (
+      <div style={{
+        padding: '32px',
+        backgroundColor: '#fafafa',
+        minHeight: '100vh',
+      }}>
+        {/* Header */}
+        <div style={{
+          marginBottom: '32px',
+        }}>
+          <h1 style={{
+            fontSize: '32px',
+            fontWeight: 'bold',
+            color: '#333',
+            margin: '0 0 8px 0',
+          }}>
+            Portfolio Analytics
+          </h1>
+          <p style={{
+            color: '#666',
+            fontSize: '16px',
+            margin: 0,
+          }}>
+            Comprehensive insights into your portfolio performance and composition
+          </p>
+        </div>
+
+        {/* Progress indicator */}
+        <div style={{
+          marginBottom: '24px',
+          padding: '16px',
+          backgroundColor: 'white',
+          borderRadius: '8px',
+          border: '1px solid #e0e0e0',
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            marginBottom: '8px',
+          }}>
+            <Activity size={20} style={{ color: '#2196f3', marginRight: '8px' }} />
+            <span style={{ color: '#333', fontWeight: '500' }}>
+              Calculating Analytics... {calculationProgress}%
+            </span>
+          </div>
+          <div style={{
+            width: '100%',
+            height: '4px',
+            backgroundColor: '#f0f0f0',
+            borderRadius: '2px',
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              width: `${calculationProgress}%`,
+              height: '100%',
+              backgroundColor: '#2196f3',
+              transition: 'width 0.3s ease',
+            }} />
+          </div>
+        </div>
+
+        {/* Loading skeletons for analytics sections */}
+        <LoadingSkeleton type="card" count={4} />
+      </div>
+    );
+  }
+
   return (
     <div style={{
       padding: '32px',
@@ -346,7 +468,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = () => {
               Account Size Distribution
             </h3>
             {Object.entries(analytics.accountSizeRanges).map(([range, count], index) => {
-              const percentage = analytics.totalAccounts > 0 ? (count / analytics.totalAccounts) * 100 : 0;
+              const percentage = analytics.totalAccounts > 0 ? ((count as number) / analytics.totalAccounts) * 100 : 0;
               const colors = ['#2196f3', '#4caf50', '#ff9800', '#9c27b0'];
               return (
                 <ProgressBar
@@ -389,7 +511,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = () => {
               Top Accounts by Value
             </h3>
             <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-              {analytics.topAccounts.map((account, index) => (
+              {analytics.topAccounts.map((account: any, index: number) => (
                 <div
                   key={account.accountNumber}
                   style={{
@@ -524,7 +646,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {analytics.topHoldings.map((holding, index) => (
+                  {analytics.topHoldings.map((holding: any, index: number) => (
                     <tr
                       key={`${holding.symbol}-${index}`}
                       style={{
