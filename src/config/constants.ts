@@ -44,36 +44,59 @@ export const VALIDATION_CONFIG = {
 
 // Column Mapping Configuration
 export const COLUMN_MAPPINGS = {
-  // Balance file column positions (0-indexed)
+  // Balance file column positions (0-indexed) - matching actual CSV structure
   BALANCE_FILE: {
-    0: 'asOfBusinessDate',   // Column 1
-    1: 'accountNumber',      // Column 2
-    2: 'accountName',        // Column 3
-    4: 'portfolioValue',     // Column 5
-    6: 'totalCash',          // Column 7
+    0: 'asOfBusinessDate',     // As Of Business Date
+    1: 'accountNumber',        // Account Number
+    2: 'accountName',          // Account Name
+    3: 'netMarketValue',       // Net Market Value
+    4: 'portfolioValue',       // Portfolio Value
+    5: 'marketValueShort',     // Market Value Short
+    6: 'totalCash',            // Total Cash
+    7: 'cashAccountBalanceNetCreditOrDebit',        // Cash Account Balance - Net Credit or Debit
+    8: 'cashAccountBalanceNetMarketValue',          // Cash Account Balance - Net Market Value
+    9: 'cashAccountBalanceMoneyMarketFunds',        // Cash Account Balance - Money Market Funds
+    10: 'equityPercentage',    // Equity Percentage
+    11: 'optionRequirements',  // Option Requirements
+    12: 'monthEndDivPayout',   // Month-End Div Payout
+    13: 'marginAccountBalanceCreditOrDebit',        // Margin Account Balance - Credit or Debit
+    14: 'marginAccountBalanceMarketValueLong',      // Margin Account Balance - Market Value Long
+    15: 'marginAccountBalanceMarketValueShort',     // Margin Account Balance - Market Value Short
+    16: 'marginAccountBalanceEquityIncludingOptions', // Margin Account Balance - Equity Including Options
+    17: 'marginAccountBalanceMarginCashAvailable',   // Margin Account Balance - Margin Cash Available
+    18: 'marginAccountBalanceEquityExcludingOptions', // Margin Account Balance - Equity Excluding Options
+    19: 'marginBuyingPower',   // Margin Buying Power
+    20: 'mtdMarginInterest',   // MTD Margin Interest
   },
 
-  // Positions file column positions (0-indexed)
+  // Positions file column positions (0-indexed) - matching actual CSV structure
   POSITIONS_FILE: {
-    0: 'asOfBusinessDate',
-    1: 'accountNumber',
-    2: 'accountName',
-    3: 'symbol',
-    4: 'securityType',
-    5: 'securityDescription',
-    6: 'accountingRuleCode',
-    7: 'numberOfShares',
-    8: 'longShort',
-    9: 'price',
-    10: 'dateOfPrice',
-    11: 'marketValue',
+    0: 'asOfBusinessDate',     // As Of Business Date
+    1: 'accountNumber',        // Account Number
+    2: 'accountName',          // Account Name
+    3: 'symbol',               // Symbol
+    4: 'securityType',         // Security Type
+    5: 'securityDescription',  // Security Description
+    6: 'accountingRuleCode',   // Accounting Rule Code
+    7: 'numberOfShares',       // Number of Shares
+    8: 'longShort',            // Long/Short
+    9: 'price',                // Price
+    10: 'dateOfPrice',         // Date of Price
+    11: 'marketValue',         // Market Value
   },
 } as const;
 
 // Field Types Configuration
 export const FIELD_TYPES = {
   NUMERIC_FIELDS: {
-    BALANCE: ['portfolioValue', 'totalCash'],
+    BALANCE: [
+      'netMarketValue', 'portfolioValue', 'marketValueShort', 'totalCash',
+      'cashAccountBalanceNetCreditOrDebit', 'cashAccountBalanceNetMarketValue', 'cashAccountBalanceMoneyMarketFunds',
+      'equityPercentage', 'optionRequirements', 'monthEndDivPayout',
+      'marginAccountBalanceCreditOrDebit', 'marginAccountBalanceMarketValueLong', 'marginAccountBalanceMarketValueShort',
+      'marginAccountBalanceEquityIncludingOptions', 'marginAccountBalanceMarginCashAvailable', 'marginAccountBalanceEquityExcludingOptions',
+      'marginBuyingPower', 'mtdMarginInterest'
+    ],
     POSITIONS: ['numberOfShares', 'price', 'marketValue'],
   },
   DATE_FIELDS: ['asOfBusinessDate', 'dateOfPrice'],

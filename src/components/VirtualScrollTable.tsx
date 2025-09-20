@@ -1,0 +1,372 @@
+import React, { useMemo, useCallback, useRef } from 'react';
+import { List } from 'react-window';
+import { SortAsc, SortDesc } from 'lucide-react';
+
+export interface VirtualTableColumn<T = any> {
+  key: keyof T;
+  label: string;
+  width: number;
+  sortable?: boolean;
+  essential?: boolean;
+  formatter?: (value: any, row: T) => React.ReactNode;
+  align?: 'left' | 'center' | 'right';
+}
+
+export interface VirtualTableProps<T = any> {
+  data: T[];
+  columns: VirtualTableColumn<T>[];
+  height: number;
+  rowHeight?: number;
+  showAllColumns?: boolean;
+  sortField?: string;
+  sortDirection?: 'asc' | 'desc';
+  onSort?: (field: string, direction: 'asc' | 'desc') => void;
+  onRowClick?: (row: T, index: number) => void;
+  loading?: boolean;
+  className?: string;
+  overscanCount?: number;
+}
+
+interface RowData<T> {
+  items: T[];
+  columns: VirtualTableColumn<T>[];
+  onRowClick?: (row: T, index: number) => void;
+}
+
+const VirtualScrollTable = <T extends any>({
+  data,
+  columns,
+  height,
+  rowHeight = 40,
+  showAllColumns = false,
+  sortField,
+  sortDirection,
+  onSort,
+  onRowClick,
+  loading = false,
+  className = '',
+  overscanCount = 5,
+}: VirtualTableProps<T>): React.JSX.Element => {
+  const listRef = useRef<any>(null);
+
+  // Filter columns based on showAllColumns
+  const visibleColumns = useMemo(() => {
+    return showAllColumns ? columns : columns.filter(col => col.essential !== false);
+  }, [columns, showAllColumns]);
+
+  // Calculate total width
+  const totalWidth = useMemo(() => {
+    return visibleColumns.reduce((sum, col) => sum + col.width, 0);
+  }, [visibleColumns]);
+
+  // Memoized row data to prevent unnecessary re-renders
+  const rowData = useMemo<RowData<T>>(() => ({
+    items: data,
+    columns: visibleColumns,
+    onRowClick,
+  }), [data, visibleColumns, onRowClick]);
+
+  // Row renderer component - compatible with react-window v2.1.1
+  const Row = useCallback(({ index, style }: { index: number; style: React.CSSProperties }) => {
+    const { items, columns, onRowClick } = rowData;
+    const item = items[index];
+
+    const handleClick = () => {
+      if (onRowClick) {
+        onRowClick(item, index);
+      }
+    };
+
+    return (
+      <div
+        style={{
+          ...style,
+          display: 'flex',
+          alignItems: 'center',
+          borderBottom: '1px solid #e0e0e0',
+          backgroundColor: index % 2 === 0 ? 'white' : '#fafafa',
+          cursor: onRowClick ? 'pointer' : 'default',
+        }}
+        onClick={handleClick}
+      >
+        {columns.map((column: VirtualTableColumn<T>, colIndex: number) => {
+          const value = item[column.key];
+          const displayValue = column.formatter ? column.formatter(value, item) : value;
+
+          return (
+            <div
+              key={`${column.key as string}-${colIndex}`}
+              style={{
+                width: column.width,
+                padding: '8px 12px',
+                textAlign: column.align || 'left',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                fontSize: '14px',
+                color: '#333',
+              }}
+              title={typeof value === 'string' ? value : String(value)}
+            >
+              {displayValue as React.ReactNode}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }, [rowData]);
+
+  // Handle sorting
+  const handleSort = useCallback((field: string) => {
+    if (!onSort) return;
+
+    const newDirection = sortField === field && sortDirection === 'asc' ? 'desc' : 'asc';
+    onSort(field, newDirection);
+  }, [sortField, sortDirection, onSort]);
+
+  // Render sort icon
+  const renderSortIcon = useCallback((field: string) => {
+    if (sortField !== field) return null;
+    return sortDirection === 'asc'
+      ? <SortAsc size={14} style={{ marginLeft: '4px' }} />
+      : <SortDesc size={14} style={{ marginLeft: '4px' }} />;
+  }, [sortField, sortDirection]);
+
+  // Loading state
+  if (loading) {
+    return (
+      <div
+        className={className}
+        style={{
+          height,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: '#fafafa',
+          border: '1px solid #e0e0e0',
+          borderRadius: '8px',
+        }}
+      >
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: '40px',
+            height: '40px',
+            border: '4px solid #f3f3f3',
+            borderTop: '4px solid #2196f3',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 16px'
+          }} />
+          <p style={{ color: '#666', fontSize: '14px' }}>Loading data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Empty state
+  if (data.length === 0) {
+    return (
+      <div
+        className={className}
+        style={{
+          height,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'white',
+          border: '1px solid #e0e0e0',
+          borderRadius: '8px',
+        }}
+      >
+        <div style={{ textAlign: 'center', color: '#666' }}>
+          <p style={{ fontSize: '16px', marginBottom: '8px' }}>No data available</p>
+          <p style={{ fontSize: '14px' }}>Import data to see results here</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={className}
+      style={{
+        border: '1px solid #e0e0e0',
+        borderRadius: '8px',
+        overflow: 'hidden',
+        backgroundColor: 'white',
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: 'flex',
+          backgroundColor: '#f8f9fa',
+          borderBottom: '2px solid #e0e0e0',
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+        }}
+      >
+        {visibleColumns.map((column) => (
+          <div
+            key={column.key as string}
+            style={{
+              width: column.width,
+              padding: '12px',
+              fontWeight: '600',
+              fontSize: '14px',
+              color: '#333',
+              borderRight: '1px solid #e0e0e0',
+              cursor: column.sortable && onSort ? 'pointer' : 'default',
+              userSelect: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: column.align === 'right' ? 'flex-end' :
+                              column.align === 'center' ? 'center' : 'flex-start',
+            }}
+            onClick={() => column.sortable && handleSort(column.key as string)}
+          >
+            {column.label}
+            {column.sortable && renderSortIcon(column.key as string)}
+          </div>
+        ))}
+      </div>
+
+      {/* Virtual List */}
+      <List
+        ref={listRef}
+        height={height - 50}
+        width={totalWidth}
+        itemCount={data.length}
+        itemSize={rowHeight}
+        overscanCount={overscanCount}
+      >
+        {Row}
+      </List>
+
+      {/* Footer with row count */}
+      <div
+        style={{
+          padding: '8px 12px',
+          backgroundColor: '#f8f9fa',
+          borderTop: '1px solid #e0e0e0',
+          fontSize: '12px',
+          color: '#666',
+          textAlign: 'center',
+        }}
+      >
+        Showing {data.length.toLocaleString()} rows
+      </div>
+    </div>
+  );
+};
+
+// Performance utilities
+export const createVirtualTableHelpers = <T extends any>() => {
+  // Data sorter
+  const sortData = (
+    data: T[],
+    field: keyof T,
+    direction: 'asc' | 'desc'
+  ): T[] => {
+    return [...data].sort((a, b) => {
+      const aValue = a[field];
+      const bValue = b[field];
+
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return direction === 'asc' ? aValue - bValue : bValue - aValue;
+      }
+
+      const aStr = String(aValue || '').toLowerCase();
+      const bStr = String(bValue || '').toLowerCase();
+
+      if (direction === 'asc') {
+        return aStr.localeCompare(bStr);
+      } else {
+        return bStr.localeCompare(aStr);
+      }
+    });
+  };
+
+  // Data filter
+  const filterData = (
+    data: T[],
+    filters: Partial<Record<keyof T, any>>
+  ): T[] => {
+    return data.filter(item => {
+      return Object.entries(filters).every(([key, value]) => {
+        if (!value) return true;
+
+        const itemValue = item[key as keyof T];
+        if (typeof itemValue === 'string' && typeof value === 'string') {
+          return itemValue.toLowerCase().includes(value.toLowerCase());
+        }
+
+        return itemValue === value;
+      });
+    });
+  };
+
+  // Batch update utility for performance
+  const createBatchUpdater = (
+    setState: React.Dispatch<React.SetStateAction<any>>,
+    delay: number = 16
+  ) => {
+    let timeoutId: NodeJS.Timeout;
+    let pendingUpdates: (() => void)[] = [];
+
+    return (updateFn: () => void) => {
+      pendingUpdates.push(updateFn);
+
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        setState((prev: any) => {
+          let newState = prev;
+          pendingUpdates.forEach(update => {
+            update();
+          });
+          pendingUpdates = [];
+          return newState;
+        });
+      }, delay);
+    };
+  };
+
+  return {
+    sortData,
+    filterData,
+    createBatchUpdater,
+  };
+};
+
+// Format helpers for common data types
+export const formatters = {
+  currency: (value: number) =>
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+    }).format(value || 0),
+
+  number: (value: number, decimals: number = 0) =>
+    new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    }).format(value || 0),
+
+  percentage: (value: number, decimals: number = 1) =>
+    `${(value || 0).toFixed(decimals)}%`,
+
+  date: (value: string | Date): string => {
+    if (!value) return '-';
+    const date = new Date(value);
+    return isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
+  },
+
+  truncate: (value: string, maxLength: number = 30) => {
+    if (!value || typeof value !== 'string') return value;
+    return value.length > maxLength ? `${value.substring(0, maxLength)}...` : value;
+  },
+};
+
+export default VirtualScrollTable;
