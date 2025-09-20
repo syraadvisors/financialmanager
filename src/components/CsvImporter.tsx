@@ -1,6 +1,6 @@
 import React from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, FileText, AlertCircle, CheckCircle, Info, Shield, Zap } from 'lucide-react';
+import { Upload, FileText, AlertCircle, CheckCircle, Info, Shield, Zap, Cpu, Settings } from 'lucide-react';
 import { FileType } from '../types/DataTypes';
 import { useCsvImporter } from '../hooks/useCsvImporter';
 import { APP_CONFIG } from '../config/constants';
@@ -21,10 +21,14 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
     recoveryResult,
     showRecoveryOptions,
     isProcessing,
+    useWebWorker,
+    workerProgress,
+    workerState,
     processFile,
     proceedWithWarnings,
     attemptRecovery,
-    acceptRecoveredData
+    acceptRecoveredData,
+    toggleWebWorker
   } = useCsvImporter(onDataImported);
 
   const handleDrop = (acceptedFiles: File[]) => {
@@ -44,6 +48,55 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
 
   return (
     <div className="csv-importer">
+      {/* Web Worker Settings */}
+      <div style={{
+        marginBottom: '20px',
+        padding: '12px',
+        backgroundColor: '#f8f9fa',
+        borderRadius: '8px',
+        border: '1px solid #e9ecef'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <Settings size={20} style={{ marginRight: '8px', color: '#6c757d' }} />
+            <span style={{ fontWeight: '600', color: '#495057' }}>Performance Settings</span>
+          </div>
+          <button
+            onClick={toggleWebWorker}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: useWebWorker ? '#28a745' : '#6c757d',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            <Cpu size={14} />
+            Web Worker: {useWebWorker ? 'ON' : 'OFF'}
+          </button>
+        </div>
+        <div style={{ marginTop: '8px', fontSize: '12px', color: '#6c757d' }}>
+          {useWebWorker
+            ? 'Using background processing for better performance with large files'
+            : 'Using main thread processing (may cause UI freezing with large files)'
+          }
+        </div>
+        {workerState && (
+          <div style={{ marginTop: '8px', fontSize: '12px', color: '#6c757d' }}>
+            Worker Status: {workerState.isReady ? '✅ Ready' : '⏳ Loading'} |
+            Processing: {workerState.isProcessing ? '🔄 Active' : '✅ Idle'}
+            {workerState.error && (
+              <span style={{ color: '#dc3545', marginLeft: '8px' }}>⚠️ {workerState.error}</span>
+            )}
+          </div>
+        )}
+      </div>
+
       <div 
         {...getRootProps()} 
         style={{
@@ -58,13 +111,52 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
       >
         <input {...getInputProps()} />
         <Upload size={48} style={{ margin: '0 auto', color: '#666' }} />
-        <p style={{ marginTop: '16px', fontSize: '16px' }}>
+        <p style={{ marginTop: '12px', fontSize: '16px' }}>
           {isProcessing
-            ? 'Processing file...'
+            ? (
+              <div>
+                <div>Processing file...</div>
+                {useWebWorker && workerProgress > 0 && (
+                  <div style={{ marginTop: '8px' }}>
+                    <div style={{
+                      width: '200px',
+                      height: '6px',
+                      backgroundColor: '#e9ecef',
+                      borderRadius: '3px',
+                      margin: '0 auto',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        width: `${workerProgress}%`,
+                        height: '100%',
+                        backgroundColor: '#007bff',
+                        transition: 'width 0.3s ease-in-out'
+                      }} />
+                    </div>
+                    <div style={{ fontSize: '12px', marginTop: '4px', color: '#6c757d' }}>
+                      {Math.round(workerProgress)}% complete
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
             : isDragActive
             ? 'Drop the CSV file here...'
             : 'Drag and drop a Balance or Positions CSV file here, or click to select'}
         </p>
+
+        {!isProcessing && (
+          <div style={{
+            marginTop: '12px',
+            fontSize: '12px',
+            color: '#666',
+            lineHeight: '1.4'
+          }}>
+            <strong>Flexible Import:</strong> Files with missing columns or blank cells are supported.<br/>
+            • Balance files: 7-21 columns (essential: account, portfolio value, cash)<br/>
+            • Positions files: 5-12 columns (essential: account, symbol, shares)
+          </div>
+        )}
       </div>
 
       {fileName && (

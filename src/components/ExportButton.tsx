@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo, useCallback } from 'react';
 import { Download, ChevronDown } from 'lucide-react';
 import ExportDialog from './ExportDialog';
 import {
@@ -18,7 +18,7 @@ interface ExportButtonProps {
   className?: string;
 }
 
-const ExportButton: React.FC<ExportButtonProps> = ({
+const ExportButton: React.FC<ExportButtonProps> = memo(({
   data,
   dataType,
   title = 'Data',
@@ -30,7 +30,7 @@ const ExportButton: React.FC<ExportButtonProps> = ({
   const [showDialog, setShowDialog] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
 
-  const getSizeStyles = () => {
+  const getSizeStyles = useCallback(() => {
     switch (size) {
       case 'small':
         return { padding: '6px 12px', fontSize: '12px' };
@@ -39,9 +39,9 @@ const ExportButton: React.FC<ExportButtonProps> = ({
       default:
         return { padding: '8px 16px', fontSize: '14px' };
     }
-  };
+  }, [size]);
 
-  const quickExport = async (format: 'csv' | 'excel' | 'json') => {
+  const quickExport = useCallback(async (format: 'csv' | 'excel' | 'json') => {
     if (!data || data.length === 0) return;
 
     const options: ExportOptions = {
@@ -68,7 +68,7 @@ const ExportButton: React.FC<ExportButtonProps> = ({
     } catch (error) {
       console.error('Export failed:', error);
     }
-  };
+  }, [data, dataType]);
 
   if (variant === 'button') {
     return (
@@ -249,6 +249,8 @@ const ExportButton: React.FC<ExportButtonProps> = ({
       />
     </>
   );
-};
+});
+
+ExportButton.displayName = 'ExportButton';
 
 export default ExportButton;
