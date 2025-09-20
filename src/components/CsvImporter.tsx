@@ -1,9 +1,10 @@
 import React from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, FileText, AlertCircle, CheckCircle, Info } from 'lucide-react';
+import { Upload, FileText, AlertCircle, CheckCircle, Info, Shield, Zap } from 'lucide-react';
 import { FileType } from '../types/DataTypes';
 import { useCsvImporter } from '../hooks/useCsvImporter';
 import { APP_CONFIG } from '../config/constants';
+import EnhancedErrorDisplay from './EnhancedErrorDisplay';
 
 interface CsvImporterProps {
   onDataImported: (data: any[], fileType: FileType, summary: any) => void;
@@ -16,9 +17,14 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
     error,
     fileType,
     validationResult,
+    enhancedValidation,
+    recoveryResult,
+    showRecoveryOptions,
     isProcessing,
     processFile,
-    proceedWithWarnings
+    proceedWithWarnings,
+    attemptRecovery,
+    acceptRecoveredData
   } = useCsvImporter(onDataImported);
 
   const handleDrop = (acceptedFiles: File[]) => {
@@ -79,10 +85,10 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
         </div>
       )}
 
-      {error && (
-        <div style={{ 
-          color: '#d32f2f', 
-          marginBottom: '20px', 
+      {error && !enhancedValidation && (
+        <div style={{
+          color: '#d32f2f',
+          marginBottom: '20px',
           padding: '12px',
           backgroundColor: '#ffebee',
           borderRadius: '4px',
@@ -93,11 +99,115 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
         </div>
       )}
 
-      {validationResult && (
+      {/* Enhanced Error Display */}
+      {enhancedValidation && (
+        <EnhancedErrorDisplay
+          validationResult={enhancedValidation}
+          recoveryResult={recoveryResult}
+          onProceedWithWarnings={proceedWithWarnings}
+          onRetry={() => window.location.reload()}
+        />
+      )}
+
+      {/* Recovery Options */}
+      {showRecoveryOptions && !recoveryResult && (
+        <div style={{
+          padding: '16px',
+          backgroundColor: '#fff3e0',
+          borderRadius: '8px',
+          border: '1px solid #ffcc02',
+          marginBottom: '20px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
+            <Shield size={20} style={{ color: '#f57c00', marginRight: '8px' }} />
+            <h3 style={{ margin: 0, color: '#e65100' }}>Data Recovery Available</h3>
+          </div>
+          <p style={{ marginBottom: '16px', color: '#666' }}>
+            The data contains errors but may be recoverable. Would you like to attempt automatic data recovery?
+          </p>
+          <button
+            onClick={attemptRecovery}
+            disabled={isProcessing}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#ff9800',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: isProcessing ? 'not-allowed' : 'pointer',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            <Zap size={16} />
+            {isProcessing ? 'Attempting Recovery...' : 'Attempt Recovery'}
+          </button>
+        </div>
+      )}
+
+      {/* Recovery Results */}
+      {recoveryResult && (
+        <div style={{
+          padding: '16px',
+          backgroundColor: recoveryResult.success ? '#e8f5e9' : '#ffebee',
+          borderRadius: '8px',
+          border: `1px solid ${recoveryResult.success ? '#c8e6c9' : '#ffcdd2'}`,
+          marginBottom: '20px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
+            <Shield size={20} style={{
+              color: recoveryResult.success ? '#4caf50' : '#f44336',
+              marginRight: '8px'
+            }} />
+            <h3 style={{
+              margin: 0,
+              color: recoveryResult.success ? '#2e7d32' : '#c62828'
+            }}>
+              Recovery {recoveryResult.success ? 'Successful' : 'Failed'}
+            </h3>
+          </div>
+
+          {recoveryResult.success ? (
+            <>
+              <div style={{ marginBottom: '12px' }}>
+                <strong>Recovered:</strong> {recoveryResult.recoveredData.length} rows<br />
+                <strong>Discarded:</strong> {recoveryResult.discardedRows} rows<br />
+                <strong>Quality Score:</strong> {recoveryResult.qualityScore}%<br />
+                <strong>Recovery Actions:</strong> {recoveryResult.recoveryActions.length}
+              </div>
+
+              <button
+                onClick={acceptRecoveredData}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#4caf50',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  marginRight: '12px'
+                }}
+              >
+                Accept Recovered Data
+              </button>
+            </>
+          ) : (
+            <div style={{ color: '#666' }}>
+              Recovery was not possible. Please review and fix the data manually.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Legacy Validation Display (for backward compatibility) */}
+      {validationResult && !enhancedValidation && (
         <div style={{ marginBottom: '20px' }}>
-          {/* Summary */}
-          <div style={{ 
-            padding: '12px', 
+          {/* Keep the existing legacy validation display for fallback */}
+          <div style={{
+            padding: '12px',
             backgroundColor: validationResult.valid ? '#e8f5e9' : '#fff3e0',
             borderRadius: '4px',
             marginBottom: '10px'
@@ -118,10 +228,9 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
             </div>
           </div>
 
-          {/* Errors */}
           {validationResult.errors.length > 0 && (
-            <div style={{ 
-              padding: '12px', 
+            <div style={{
+              padding: '12px',
               backgroundColor: '#ffebee',
               borderRadius: '4px',
               marginBottom: '10px'
@@ -138,10 +247,9 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
             </div>
           )}
 
-          {/* Warnings */}
           {validationResult.warnings.length > 0 && (
-            <div style={{ 
-              padding: '12px', 
+            <div style={{
+              padding: '12px',
               backgroundColor: '#fff8e1',
               borderRadius: '4px',
               marginBottom: '10px'
@@ -174,10 +282,9 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
             </div>
           )}
 
-          {/* Success */}
           {validationResult.valid && (
-            <div style={{ 
-              padding: '12px', 
+            <div style={{
+              padding: '12px',
               backgroundColor: '#e8f5e9',
               borderRadius: '4px'
             }}>

@@ -2,6 +2,8 @@ import { useState, useCallback } from 'react';
 import Papa from 'papaparse';
 import { FileType } from '../types/DataTypes';
 import { detectFileTypeByColumnCount, validateFileData, extractRequiredColumnsFromArray } from '../utils/validation';
+import { EnhancedFileValidator, EnhancedValidationResult } from '../utils/enhancedValidation';
+import { DataRecoveryEngine, RecoveryResult } from '../utils/dataRecovery';
 import { APP_CONFIG } from '../config/constants';
 
 interface ValidationResult {
@@ -16,7 +18,13 @@ interface ValidationResult {
   };
 }
 
-interface CsvImporterState {
+interface EnhancedImporterState {
+  enhancedValidation?: EnhancedValidationResult;
+  recoveryResult?: RecoveryResult<any>;
+  showRecoveryOptions: boolean;
+}
+
+interface CsvImporterState extends EnhancedImporterState {
   preview: any[];
   fileName: string;
   error: string;
@@ -30,6 +38,8 @@ interface UseCsvImporterReturn extends CsvImporterState {
   processFile: (file: File) => void;
   clearState: () => void;
   proceedWithWarnings: () => any[] | null;
+  attemptRecovery: () => Promise<void>;
+  acceptRecoveredData: () => void;
 }
 
 const initialState: CsvImporterState = {
@@ -40,6 +50,9 @@ const initialState: CsvImporterState = {
   validationResult: null,
   processedData: [],
   isProcessing: false,
+  enhancedValidation: undefined,
+  recoveryResult: undefined,
+  showRecoveryOptions: false,
 };
 
 export const useCsvImporter = (onDataImported: (data: any[], fileType: FileType, summary: any) => void): UseCsvImporterReturn => {
@@ -49,15 +62,31 @@ export const useCsvImporter = (onDataImported: (data: any[], fileType: FileType,
     setState(initialState);
   }, []);
 
-  const processFile = useCallback((file: File) => {
+  const processFile = useCallback(async (file: File) => {
     setState(prev => ({
       ...prev,
       fileName: file.name,
       error: '',
       validationResult: null,
+      enhancedValidation: undefined,
+      recoveryResult: undefined,
+      showRecoveryOptions: false,
       fileType: null,
       isProcessing: true,
     }));
+
+    const enhancedValidator = new EnhancedFileValidator();
+
+    // Enhanced file validation
+    const fileValidation = await enhancedValidator.validateFile(file);
+    if (!fileValidation.valid) {
+      setState(prev => ({
+        ...prev,
+        error: fileValidation.errors.map(e => e.message).join('; '),
+        isProcessing: false,
+      }));
+      return;
+    }
 
     // Validate file size
     const maxSizeBytes = APP_CONFIG.FILE.MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -111,8 +140,11 @@ export const useCsvImporter = (onDataImported: (data: any[], fileType: FileType,
             return;
           }
 
-          // Validate data
-          const validation = validateFileData(results.data, detectedType);
+          // Enhanced validation
+          const enhancedValidation = enhancedValidator.validateCsvData(results.data, detectedType);
+
+          // Fallback to legacy validation for backward compatibility
+          const legacyValidation = validateFileData(results.data, detectedType);
 
           // Extract only required columns by position
           const extracted = extractRequiredColumnsFromArray(results.data, detectedType);
@@ -120,15 +152,17 @@ export const useCsvImporter = (onDataImported: (data: any[], fileType: FileType,
           setState(prev => ({
             ...prev,
             fileType: detectedType,
-            validationResult: validation,
+            validationResult: legacyValidation,
+            enhancedValidation,
             processedData: extracted,
             preview: extracted.slice(0, APP_CONFIG.FILE.PREVIEW_ROWS),
+            showRecoveryOptions: !enhancedValidation.valid && enhancedValidation.recoverable,
             isProcessing: false,
           }));
 
           // Pass data to parent if validation is successful
-          if (validation.valid) {
-            onDataImported(extracted, detectedType, validation.summary);
+          if (enhancedValidation.valid) {
+            onDataImported(extracted, detectedType, enhancedValidation.summary);
           }
 
         } catch (parseError) {
@@ -159,10 +193,69 @@ export const useCsvImporter = (onDataImported: (data: any[], fileType: FileType,
     return null;
   }, [state.processedData, state.fileType, state.validationResult, onDataImported]);
 
+  const attemptRecovery = useCallback(async () => {
+    if (!state.enhancedValidation || !state.fileType || !state.processedData) {
+      return;
+    }
+
+    setState(prev => ({ ...prev, isProcessing: true }));
+
+    try {
+      const recoveryEngine = new DataRecoveryEngine();
+      const recoveryResult = await recoveryEngine.attemptRecovery(
+        state.processedData,
+        state.fileType,
+        state.enhancedValidation,
+        {
+          allowPartialData: true,
+          minValidRowsPercent: 60,
+          maxErrorsPercent: 40,
+          autoFix: true,
+          preserveStructure: true
+        }
+      );
+
+      setState(prev => ({
+        ...prev,
+        recoveryResult,
+        isProcessing: false,
+        showRecoveryOptions: recoveryResult.success,
+      }));
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        error: `Recovery failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        isProcessing: false,
+      }));
+    }
+  }, [state.enhancedValidation, state.fileType, state.processedData]);
+
+  const acceptRecoveredData = useCallback(() => {
+    if (state.recoveryResult?.success && state.fileType && state.recoveryResult.recoveredData.length > 0) {
+      const summary = {
+        totalRows: state.recoveryResult.recoveredData.length,
+        uniqueAccounts: new Set(state.recoveryResult.recoveredData.map((row: any) => row.accountNumber)).size,
+        qualityScore: state.recoveryResult.qualityScore,
+        recoveryActions: state.recoveryResult.recoveryActions.length,
+        discardedRows: state.recoveryResult.discardedRows
+      };
+
+      onDataImported(state.recoveryResult.recoveredData, state.fileType, summary);
+
+      setState(prev => ({
+        ...prev,
+        processedData: state.recoveryResult!.recoveredData,
+        showRecoveryOptions: false,
+      }));
+    }
+  }, [state.recoveryResult, state.fileType, onDataImported]);
+
   return {
     ...state,
     processFile,
     clearState,
     proceedWithWarnings,
+    attemptRecovery,
+    acceptRecoveredData,
   };
 };
