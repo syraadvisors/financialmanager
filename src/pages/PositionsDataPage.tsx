@@ -1,22 +1,31 @@
-import React, { useState, useMemo } from 'react';
-import { Search, Eye, EyeOff, SortAsc, SortDesc, TrendingUp, DollarSign } from 'lucide-react';
+import React, { useState, useMemo, memo, useCallback, Suspense, lazy } from 'react';
+import { Search, Eye, EyeOff, SortAsc, SortDesc, TrendingUp, DollarSign, Zap } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { DataProcessingErrorFallback } from '../components/ErrorFallbacks';
 import ExportButton from '../components/ExportButton';
+import LoadingSkeleton from '../components/LoadingSkeleton';
+import type { VirtualTableColumn } from '../components/VirtualScrollTable';
+import { formatters } from '../components/VirtualScrollTable';
+
+// Lazy load the VirtualScrollTable component
+const VirtualScrollTable = lazy(() => import('../components/VirtualScrollTable').then(module => ({
+  default: module.default
+})));
 
 interface PositionsDataPageProps {
   onExportData?: (data: any[], format: 'csv' | 'excel') => void;
 }
 
-const PositionsDataPage: React.FC<PositionsDataPageProps> = ({ onExportData }) => {
+const PositionsDataPage: React.FC<PositionsDataPageProps> = memo(({ onExportData }) => {
   const { state } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<string>('marketValue');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [showAllColumns, setShowAllColumns] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
   const [filterType, setFilterType] = useState<string>('all');
+  const [useVirtualScrolling, setUseVirtualScrolling] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 25;
 
   const { positionsData } = state;
@@ -27,9 +36,9 @@ const PositionsDataPage: React.FC<PositionsDataPageProps> = ({ onExportData }) =
     return Array.from(types).sort();
   }, [positionsData]);
 
-  // Filter and sort data
-  const processedData = useMemo(() => {
-    let filtered = positionsData.filter(position => {
+  // Filter data (sorting handled by virtual table)
+  const filteredData = useMemo(() => {
+    return positionsData.filter(position => {
       // Search filter
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();
@@ -50,56 +59,60 @@ const PositionsDataPage: React.FC<PositionsDataPageProps> = ({ onExportData }) =
 
       return true;
     });
+  }, [positionsData, searchTerm, filterType]);
 
-    // Sort data
-    filtered.sort((a, b) => {
-      const aValue = a[sortField as keyof typeof a];
-      const bValue = b[sortField as keyof typeof b];
+  // Sorted data for virtual scrolling
+  const processedData = useMemo(() => {
+    if (!useVirtualScrolling) {
+      // Traditional sorting for pagination view
+      return [...filteredData].sort((a, b) => {
+        const aValue = a[sortField as keyof typeof a];
+        const bValue = b[sortField as keyof typeof b];
 
-      if (typeof aValue === 'number' && typeof bValue === 'number') {
-        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
-      }
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+          return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+        }
 
-      const aStr = String(aValue || '').toLowerCase();
-      const bStr = String(bValue || '').toLowerCase();
+        const aStr = String(aValue || '').toLowerCase();
+        const bStr = String(bValue || '').toLowerCase();
 
-      if (sortDirection === 'asc') {
-        return aStr.localeCompare(bStr);
-      } else {
-        return bStr.localeCompare(aStr);
-      }
-    });
+        if (sortDirection === 'asc') {
+          return aStr.localeCompare(bStr);
+        } else {
+          return bStr.localeCompare(aStr);
+        }
+      });
+    }
+    return filteredData;
+  }, [filteredData, sortField, sortDirection, useVirtualScrolling]);
 
-    return filtered;
-  }, [positionsData, searchTerm, sortField, sortDirection, filterType]);
-
-  // Pagination
+  // Pagination (only for traditional view)
   const totalPages = Math.ceil(processedData.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedData = processedData.slice(startIndex, startIndex + itemsPerPage);
 
   // Calculate summary statistics
-  const totalMarketValue = processedData.reduce((sum, pos) =>
+  const totalMarketValue = filteredData.reduce((sum, pos) =>
     sum + (parseFloat(pos.marketValue?.toString() || '0') || 0), 0
   );
 
-  const totalPositions = processedData.length;
-  const uniqueSymbols = new Set(processedData.map(pos => pos.symbol).filter(Boolean)).size;
+  const totalPositions = filteredData.length;
+  const uniqueSymbols = new Set(filteredData.map(pos => pos.symbol).filter(Boolean)).size;
 
-  const formatCurrency = (amount: number) =>
+  const formatCurrency = useCallback((amount: number) =>
     new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: 2,
-    }).format(amount);
+    }).format(amount), []);
 
-  const formatNumber = (num: number) =>
+  const formatNumber = useCallback((num: number) =>
     new Intl.NumberFormat('en-US', {
       minimumFractionDigits: 0,
       maximumFractionDigits: 4,
-    }).format(num);
+    }).format(num), []);
 
-  const handleSort = (field: string) => {
+  const handleSort = useCallback((field: string) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -107,14 +120,71 @@ const PositionsDataPage: React.FC<PositionsDataPageProps> = ({ onExportData }) =
       setSortDirection(field === 'marketValue' || field === 'numberOfShares' || field === 'price' ? 'desc' : 'asc');
     }
     setCurrentPage(1);
-  };
+  }, [sortField, sortDirection]);
 
-  const getSortIcon = (field: string) => {
+  const handleVirtualSort = useCallback((field: string, direction: 'asc' | 'desc') => {
+    setSortField(field);
+    setSortDirection(direction);
+  }, []);
+
+  const getSortIcon = useCallback((field: string) => {
     if (sortField !== field) return null;
     return sortDirection === 'asc' ? <SortAsc size={14} /> : <SortDesc size={14} />;
-  };
+  }, [sortField, sortDirection]);
 
-  const columns = [
+  // Virtual table columns with formatters
+  const virtualColumns: VirtualTableColumn[] = [
+    { key: 'accountNumber', label: 'Account', width: 120, sortable: true, essential: true },
+    { key: 'symbol', label: 'Symbol', width: 100, sortable: true, essential: true },
+    {
+      key: 'securityDescription',
+      label: 'Description',
+      width: 200,
+      sortable: true,
+      essential: false,
+      formatter: (value: string) => formatters.truncate(value, 25)
+    },
+    { key: 'securityType', label: 'Type', width: 100, sortable: true, essential: true },
+    {
+      key: 'numberOfShares',
+      label: 'Shares',
+      width: 120,
+      sortable: true,
+      essential: true,
+      align: 'right',
+      formatter: formatters.number
+    },
+    {
+      key: 'price',
+      label: 'Price',
+      width: 100,
+      sortable: true,
+      essential: true,
+      align: 'right',
+      formatter: formatters.currency
+    },
+    {
+      key: 'marketValue',
+      label: 'Market Value',
+      width: 140,
+      sortable: true,
+      essential: true,
+      align: 'right',
+      formatter: formatters.currency
+    },
+    { key: 'longShort', label: 'L/S', width: 60, sortable: true, essential: false },
+    {
+      key: 'dateOfPrice',
+      label: 'Price Date',
+      width: 100,
+      sortable: true,
+      essential: false,
+      formatter: formatters.date
+    },
+  ];
+
+  // Legacy columns for traditional table
+  const legacyColumns = [
     { key: 'accountNumber', label: 'Account', sortable: true, essential: true },
     { key: 'symbol', label: 'Symbol', sortable: true, essential: true },
     { key: 'securityDescription', label: 'Description', sortable: true, essential: false },
@@ -126,7 +196,7 @@ const PositionsDataPage: React.FC<PositionsDataPageProps> = ({ onExportData }) =
     { key: 'dateOfPrice', label: 'Price Date', sortable: true, essential: false },
   ];
 
-  const visibleColumns = showAllColumns ? columns : columns.filter(col => col.essential);
+  const visibleColumns = showAllColumns ? legacyColumns : legacyColumns.filter(col => col.essential);
 
   if (positionsData.length === 0) {
     return (
@@ -179,7 +249,8 @@ const PositionsDataPage: React.FC<PositionsDataPageProps> = ({ onExportData }) =
             fontSize: '16px',
             margin: 0,
           }}>
-            {totalPositions.toLocaleString()} positions • {uniqueSymbols} unique symbols • {formatCurrency(totalMarketValue)} total value
+{totalPositions.toLocaleString()} positions • {uniqueSymbols} unique symbols • {formatCurrency(totalMarketValue)} total value
+            {useVirtualScrolling && <span style={{ color: '#1976d2', marginLeft: '8px' }}>• Virtual Scrolling Active</span>}
           </p>
         </div>
 
@@ -307,6 +378,27 @@ const PositionsDataPage: React.FC<PositionsDataPageProps> = ({ onExportData }) =
             ))}
           </select>
 
+          {/* Virtual Scrolling Toggle */}
+          <button
+            onClick={() => setUseVirtualScrolling(!useVirtualScrolling)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 12px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              background: useVirtualScrolling ? '#e3f2fd' : 'white',
+              cursor: 'pointer',
+              fontSize: '14px',
+              color: useVirtualScrolling ? '#1976d2' : '#666',
+            }}
+            title={useVirtualScrolling ? 'Switch to paginated view' : 'Switch to virtual scrolling (better for large datasets)'}
+          >
+            <Zap size={16} />
+            {useVirtualScrolling ? 'Virtual Mode' : 'Paginated Mode'}
+          </button>
+
           {/* Column Toggle */}
           <button
             onClick={() => setShowAllColumns(!showAllColumns)}
@@ -328,143 +420,163 @@ const PositionsDataPage: React.FC<PositionsDataPageProps> = ({ onExportData }) =
         </div>
       </div>
 
-      {/* Data Table */}
+      {/* Data Display */}
       <ErrorBoundary fallback={<DataProcessingErrorFallback />}>
-        <div style={{
-          background: 'white',
-          borderRadius: '8px',
-          border: '1px solid #e0e0e0',
-          overflow: 'hidden',
-        }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#f8f9fa' }}>
-                  {visibleColumns.map(column => (
-                    <th
-                      key={column.key}
-                      onClick={column.sortable ? () => handleSort(column.key) : undefined}
+        {useVirtualScrolling ? (
+          /* Virtual Scrolling Table */
+          <Suspense fallback={<LoadingSkeleton type="table" count={10} />}>
+            <VirtualScrollTable
+              data={processedData}
+              columns={virtualColumns}
+              height={600}
+              rowHeight={44}
+              showAllColumns={showAllColumns}
+              sortField={sortField}
+              sortDirection={sortDirection}
+              onSort={handleVirtualSort}
+              className="positions-virtual-table"
+            />
+          </Suspense>
+        ) : (
+          /* Traditional Paginated Table */
+          <div style={{
+            background: 'white',
+            borderRadius: '8px',
+            border: '1px solid #e0e0e0',
+            overflow: 'hidden',
+          }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f8f9fa' }}>
+                    {visibleColumns.map(column => (
+                      <th
+                        key={column.key}
+                        onClick={column.sortable ? () => handleSort(column.key) : undefined}
+                        style={{
+                          padding: '12px',
+                          textAlign: 'left',
+                          fontWeight: '600',
+                          fontSize: '14px',
+                          color: '#333',
+                          borderBottom: '2px solid #e0e0e0',
+                          cursor: column.sortable ? 'pointer' : 'default',
+                          userSelect: 'none',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}>
+                          {column.label}
+                          {getSortIcon(column.key)}
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedData.map((position, index) => (
+                    <tr
+                      key={`${position.accountNumber}-${position.symbol}-${index}`}
                       style={{
-                        padding: '12px',
-                        textAlign: 'left',
-                        fontWeight: '600',
-                        fontSize: '14px',
-                        color: '#333',
-                        borderBottom: '2px solid #e0e0e0',
-                        cursor: column.sortable ? 'pointer' : 'default',
-                        userSelect: 'none',
-                        whiteSpace: 'nowrap',
+                        borderBottom: '1px solid #f0f0f0',
+                        backgroundColor: index % 2 === 0 ? 'white' : '#fafafa',
                       }}
                     >
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                      }}>
-                        {column.label}
-                        {getSortIcon(column.key)}
-                      </div>
-                    </th>
+                      {visibleColumns.map(column => {
+                        const value = position[column.key as keyof typeof position];
+                        let displayValue = value;
+
+                        // Format based on column type
+                        if (column.key === 'marketValue' && typeof value === 'number') {
+                          displayValue = formatCurrency(value);
+                        } else if (column.key === 'price' && typeof value === 'number') {
+                          displayValue = formatCurrency(value);
+                        } else if (column.key === 'numberOfShares' && typeof value === 'number') {
+                          displayValue = formatNumber(value);
+                        } else if (typeof value === 'string' && value.length > 30 && column.key === 'securityDescription') {
+                          displayValue = value.substring(0, 30) + '...';
+                        }
+
+                        return (
+                          <td
+                            key={column.key}
+                            style={{
+                              padding: '12px',
+                              fontSize: '14px',
+                              color: '#333',
+                              whiteSpace: 'nowrap',
+                              textAlign: ['marketValue', 'price', 'numberOfShares'].includes(column.key) ? 'right' : 'left',
+                            }}
+                            title={typeof value === 'string' && value.length > 30 ? value : undefined}
+                          >
+                            {displayValue || '-'}
+                          </td>
+                        );
+                      })}
+                    </tr>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedData.map((position, index) => (
-                  <tr
-                    key={`${position.accountNumber}-${position.symbol}-${index}`}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div style={{
+                padding: '16px',
+                borderTop: '1px solid #e0e0e0',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                fontSize: '14px',
+                color: '#666',
+              }}>
+                <div>
+                  Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, processedData.length)} of {processedData.length} positions
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <button
+                    onClick={() => setCurrentPage(currentPage - 1)}
+                    disabled={currentPage === 1}
                     style={{
-                      borderBottom: '1px solid #f0f0f0',
-                      backgroundColor: index % 2 === 0 ? 'white' : '#fafafa',
+                      padding: '6px 12px',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px',
+                      background: currentPage === 1 ? '#f5f5f5' : 'white',
+                      cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                      fontSize: '14px',
                     }}
                   >
-                    {visibleColumns.map(column => {
-                      const value = position[column.key as keyof typeof position];
-                      let displayValue = value;
-
-                      // Format based on column type
-                      if (column.key === 'marketValue' && typeof value === 'number') {
-                        displayValue = formatCurrency(value);
-                      } else if (column.key === 'price' && typeof value === 'number') {
-                        displayValue = formatCurrency(value);
-                      } else if (column.key === 'numberOfShares' && typeof value === 'number') {
-                        displayValue = formatNumber(value);
-                      } else if (typeof value === 'string' && value.length > 30 && column.key === 'securityDescription') {
-                        displayValue = value.substring(0, 30) + '...';
-                      }
-
-                      return (
-                        <td
-                          key={column.key}
-                          style={{
-                            padding: '12px',
-                            fontSize: '14px',
-                            color: '#333',
-                            whiteSpace: 'nowrap',
-                            textAlign: ['marketValue', 'price', 'numberOfShares'].includes(column.key) ? 'right' : 'left',
-                          }}
-                          title={typeof value === 'string' && value.length > 30 ? value : undefined}
-                        >
-                          {displayValue || '-'}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    Previous
+                  </button>
+                  <span>Page {currentPage} of {totalPages}</span>
+                  <button
+                    onClick={() => setCurrentPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    style={{
+                      padding: '6px 12px',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px',
+                      background: currentPage === totalPages ? '#f5f5f5' : 'white',
+                      cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                      fontSize: '14px',
+                    }}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div style={{
-              padding: '16px',
-              borderTop: '1px solid #e0e0e0',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              fontSize: '14px',
-              color: '#666',
-            }}>
-              <div>
-                Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, processedData.length)} of {processedData.length} positions
-              </div>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <button
-                  onClick={() => setCurrentPage(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  style={{
-                    padding: '6px 12px',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    background: currentPage === 1 ? '#f5f5f5' : 'white',
-                    cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                    fontSize: '14px',
-                  }}
-                >
-                  Previous
-                </button>
-                <span>Page {currentPage} of {totalPages}</span>
-                <button
-                  onClick={() => setCurrentPage(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                  style={{
-                    padding: '6px 12px',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    background: currentPage === totalPages ? '#f5f5f5' : 'white',
-                    cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                    fontSize: '14px',
-                  }}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+        )}
       </ErrorBoundary>
     </div>
   );
-};
+});
+
+PositionsDataPage.displayName = 'PositionsDataPage';
 
 export default PositionsDataPage;

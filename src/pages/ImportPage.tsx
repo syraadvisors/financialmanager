@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Upload, CheckCircle, AlertTriangle, FileText, Clock } from 'lucide-react';
 import { FileType } from '../types/DataTypes';
 import { useAppContext } from '../contexts/AppContext';
-import CsvImporter from '../components/CsvImporter';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { CsvImportErrorFallback } from '../components/ErrorFallbacks';
+import LoadingSkeleton from '../components/LoadingSkeleton';
 import { APP_CONFIG } from '../config/constants';
+
+// Lazy load the CSVImporter component for better code splitting
+const CsvImporter = lazy(() => import('../components/CSVImporter'));
 
 interface ImportPageProps {
   onDataImported: (data: any[], fileType: FileType, summary: any) => void;
@@ -240,7 +243,9 @@ const ImportPage: React.FC<ImportPageProps> = ({ onDataImported }) => {
             />
           }
         >
-          <CsvImporter onDataImported={onDataImported} />
+          <Suspense fallback={<LoadingSkeleton type="card" />}>
+            <CsvImporter onDataImported={onDataImported} />
+          </Suspense>
         </ErrorBoundary>
       </div>
 
