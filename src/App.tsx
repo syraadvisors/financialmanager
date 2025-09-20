@@ -7,6 +7,9 @@ import Navigation from './components/Navigation';
 import OverviewPage from './pages/OverviewPage';
 import ImportPage from './pages/ImportPage';
 import BalanceDataPage from './pages/BalanceDataPage';
+import PositionsDataPage from './pages/PositionsDataPage';
+import AnalyticsPage from './pages/AnalyticsPage';
+import HistoryPage from './pages/HistoryPage';
 import ErrorTest from './components/ErrorTest';
 
 function App() {
@@ -98,14 +101,24 @@ function App() {
           />
         );
       case PageType.POSITIONS_DATA:
-        // TODO: Create PositionsDataPage
-        return <div style={{ padding: '32px' }}>Positions Data Page - Coming Soon</div>;
+        return (
+          <PositionsDataPage
+            appState={appState}
+            onExportData={handleExportData}
+          />
+        );
       case PageType.ANALYTICS:
-        // TODO: Create AnalyticsPage
-        return <div style={{ padding: '32px' }}>Analytics Page - Coming Soon</div>;
+        return (
+          <AnalyticsPage
+            appState={appState}
+          />
+        );
       case PageType.HISTORY:
-        // TODO: Create HistoryPage
-        return <div style={{ padding: '32px' }}>History Page - Coming Soon</div>;
+        return (
+          <HistoryPage
+            appState={appState}
+          />
+        );
       case PageType.OVERVIEW:
       default:
         return (
