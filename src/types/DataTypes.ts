@@ -5,8 +5,24 @@ export interface AccountBalance {
   asOfBusinessDate: string;
   accountNumber: string;
   accountName: string;
+  netMarketValue: number;
   portfolioValue: number;
+  marketValueShort: number;
   totalCash: number;
+  cashAccountBalanceNetCreditOrDebit: number;
+  cashAccountBalanceNetMarketValue: number;
+  cashAccountBalanceMoneyMarketFunds: number;
+  equityPercentage: number;
+  optionRequirements: number;
+  monthEndDivPayout: number;
+  marginAccountBalanceCreditOrDebit: number;
+  marginAccountBalanceMarketValueLong: number;
+  marginAccountBalanceMarketValueShort: number;
+  marginAccountBalanceEquityIncludingOptions: number;
+  marginAccountBalanceMarginCashAvailable: number;
+  marginAccountBalanceEquityExcludingOptions: number;
+  marginBuyingPower: number;
+  mtdMarginInterest: number;
 }
 
 // Positions file structure - matching your actual CSV

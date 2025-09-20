@@ -1,10 +1,11 @@
 import { useState, useCallback } from 'react';
 import Papa from 'papaparse';
 import { FileType } from '../types/DataTypes';
-import { detectFileTypeByColumnCount, validateFileData, extractRequiredColumnsFromArray } from '../utils/validation';
+import { detectFileTypeByColumnCount, smartDetectFileType, validateFileData, extractRequiredColumnsFromArray } from '../utils/validation';
 import { EnhancedFileValidator, EnhancedValidationResult } from '../utils/enhancedValidation';
 import { DataRecoveryEngine, RecoveryResult } from '../utils/dataRecovery';
 import { APP_CONFIG } from '../config/constants';
+import { useCsvWorker } from './useWebWorker';
 
 interface ValidationResult {
   valid: boolean;
@@ -32,6 +33,8 @@ interface CsvImporterState extends EnhancedImporterState {
   validationResult: ValidationResult | null;
   processedData: any[];
   isProcessing: boolean;
+  useWebWorker: boolean;
+  workerProgress: number;
 }
 
 interface UseCsvImporterReturn extends CsvImporterState {
@@ -40,6 +43,8 @@ interface UseCsvImporterReturn extends CsvImporterState {
   proceedWithWarnings: () => any[] | null;
   attemptRecovery: () => Promise<void>;
   acceptRecoveredData: () => void;
+  toggleWebWorker: () => void;
+  workerState: any;
 }
 
 const initialState: CsvImporterState = {
@@ -53,16 +58,85 @@ const initialState: CsvImporterState = {
   enhancedValidation: undefined,
   recoveryResult: undefined,
   showRecoveryOptions: false,
+  useWebWorker: true,
+  workerProgress: 0,
 };
 
 export const useCsvImporter = (onDataImported: (data: any[], fileType: FileType, summary: any) => void): UseCsvImporterReturn => {
   const [state, setState] = useState<CsvImporterState>(initialState);
 
-  const clearState = useCallback(() => {
-    setState(initialState);
-  }, []);
+  // Web Worker setup
+  const csvWorker = useCsvWorker(
+    // onParsingComplete
+    (result) => {
+      const { data, fileType: detectedType, rowCount } = result;
+      processWorkerParsingResult(data, detectedType, rowCount);
+    },
+    // onValidationComplete
+    (result) => {
+      console.log('Worker validation complete:', result);
+      setState(prev => ({ ...prev, workerProgress: 100 }));
+    },
+    // onExtractionComplete
+    (result) => {
+      const { extractedData, preview } = result;
+      finalizeWorkerProcessing(extractedData, preview);
+    },
+    // onError
+    (error) => {
+      setState(prev => ({
+        ...prev,
+        error: `Worker error: ${error}`,
+        isProcessing: false,
+        workerProgress: 0,
+      }));
+    }
+  );
 
-  const processFile = useCallback(async (file: File) => {
+  const processWorkerParsingResult = useCallback(async (data: any[], detectedType: FileType, rowCount: number) => {
+    if (!data || data.length === 0) {
+      setState(prev => ({
+        ...prev,
+        error: 'No data found in file',
+        isProcessing: false,
+        workerProgress: 0,
+      }));
+      return;
+    }
+
+    setState(prev => ({
+      ...prev,
+      fileType: detectedType,
+      workerProgress: 50, // Parsing done, validation starting
+    }));
+
+    // Start extraction
+    csvWorker.extractColumns(data, detectedType === FileType.ACCOUNT_BALANCE ? 'ACCOUNT_BALANCE' : 'POSITIONS');
+  }, [csvWorker]);
+
+  const finalizeWorkerProcessing = useCallback(async (extractedData: any[], previewData: any[]) => {
+    const enhancedValidator = new EnhancedFileValidator();
+    const enhancedValidation = enhancedValidator.validateCsvData(extractedData, state.fileType!);
+    const legacyValidation = validateFileData(extractedData, state.fileType!);
+
+    setState(prev => ({
+      ...prev,
+      validationResult: legacyValidation,
+      enhancedValidation,
+      processedData: extractedData,
+      preview: previewData,
+      showRecoveryOptions: !enhancedValidation.valid && enhancedValidation.recoverable,
+      isProcessing: false,
+      workerProgress: 100,
+    }));
+
+    // Pass data to parent if validation is successful
+    if (enhancedValidation.valid) {
+      onDataImported(extractedData, state.fileType!, enhancedValidation.summary);
+    }
+  }, [state.fileType, onDataImported]);
+
+  const processFileWithWebWorker = useCallback(async (file: File) => {
     setState(prev => ({
       ...prev,
       fileName: file.name,
@@ -73,8 +147,114 @@ export const useCsvImporter = (onDataImported: (data: any[], fileType: FileType,
       showRecoveryOptions: false,
       fileType: null,
       isProcessing: true,
+      workerProgress: 0,
     }));
 
+    // Check if worker is ready
+    if (!csvWorker.state.isReady) {
+      setState(prev => ({
+        ...prev,
+        error: 'CSV Worker is not ready. Please try again.',
+        isProcessing: false,
+      }));
+      return;
+    }
+
+    try {
+      const fileContent = await file.text();
+      csvWorker.parseCSV(fileContent, file.name);
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        error: `Error reading file: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        isProcessing: false,
+        workerProgress: 0,
+      }));
+    }
+  }, [csvWorker]);
+
+  const processFileWithPapa = useCallback(async (file: File) => {
+    Papa.parse(file, {
+      complete: (results: Papa.ParseResult<any>) => {
+        try {
+          if (!results.data || results.data.length === 0) {
+            setState(prev => ({
+              ...prev,
+              error: 'No data found in file',
+              isProcessing: false,
+            }));
+            return;
+          }
+
+          const columnCount = results.data[0].length;
+          // Smart file type detection using both column count and content analysis
+          const detectedType = smartDetectFileType(results.data);
+          console.log(`Smart detection: ${detectedType} (${columnCount} columns)`);
+
+          // Also log the basic detection for comparison
+          const basicDetection = detectFileTypeByColumnCount(columnCount);
+          console.log(`Basic detection: ${basicDetection}`);
+
+          if (detectedType === FileType.UNKNOWN) {
+            setState(prev => ({
+              ...prev,
+              error: `Unable to determine file type. File has ${columnCount} columns. \n\n` +
+                     `Expected:\n` +
+                     `• Balance files: 7-${APP_CONFIG.FILE.BALANCE_FILE_COLUMNS} columns\n` +
+                     `• Positions files: 5-${APP_CONFIG.FILE.POSITIONS_FILE_COLUMNS} columns\n\n` +
+                     `Tips:\n` +
+                     `• Files with missing columns will still work if they contain the essential data\n` +
+                     `• Make sure your file has account numbers in the second column\n` +
+                     `• Balance files should have portfolio values, positions files should have symbols`,
+              isProcessing: false,
+            }));
+            return;
+          }
+
+          const enhancedValidator = new EnhancedFileValidator();
+          const enhancedValidation = enhancedValidator.validateCsvData(results.data, detectedType);
+          const legacyValidation = validateFileData(results.data, detectedType);
+          const extracted = extractRequiredColumnsFromArray(results.data, detectedType);
+
+          setState(prev => ({
+            ...prev,
+            fileType: detectedType,
+            validationResult: legacyValidation,
+            enhancedValidation,
+            processedData: extracted,
+            preview: extracted.slice(0, APP_CONFIG.FILE.PREVIEW_ROWS),
+            showRecoveryOptions: !enhancedValidation.valid && enhancedValidation.recoverable,
+            isProcessing: false,
+          }));
+
+          if (enhancedValidation.valid) {
+            onDataImported(extracted, detectedType, enhancedValidation.summary);
+          }
+        } catch (parseError) {
+          setState(prev => ({
+            ...prev,
+            error: `Error processing file: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`,
+            isProcessing: false,
+          }));
+        }
+      },
+      header: false,
+      skipEmptyLines: true,
+      error: (error: Error) => {
+        setState(prev => ({
+          ...prev,
+          error: `Error parsing CSV: ${error.message}`,
+          isProcessing: false,
+        }));
+      }
+    });
+  }, [onDataImported]);
+
+  const clearState = useCallback(() => {
+    setState(initialState);
+  }, []);
+
+  const processFile = useCallback(async (file: File) => {
     const enhancedValidator = new EnhancedFileValidator();
 
     // Enhanced file validation
@@ -111,79 +291,22 @@ export const useCsvImporter = (onDataImported: (data: any[], fileType: FileType,
       return;
     }
 
-    Papa.parse(file, {
-      complete: (results: Papa.ParseResult<any>) => {
-        try {
-          if (!results.data || results.data.length === 0) {
-            setState(prev => ({
-              ...prev,
-              error: 'No data found in file',
-              isProcessing: false,
-            }));
-            return;
-          }
+    // Use Web Worker for large files or when enabled
+    const shouldUseWorker = state.useWebWorker && file.size > 50000; // Use worker for files > 50KB
 
-          // Get the number of columns from the first row
-          const columnCount = results.data[0].length;
-          console.log(`File has ${columnCount} columns`);
-          console.log('First row sample:', results.data[0].slice(0, 10));
+    if (shouldUseWorker) {
+      await processFileWithWebWorker(file);
+    } else {
+      await processFileWithPapa(file);
+    }
+  }, [state.useWebWorker, processFileWithWebWorker, processFileWithPapa]);
 
-          // Detect file type based on column count
-          const detectedType = detectFileTypeByColumnCount(columnCount);
-
-          if (detectedType === FileType.UNKNOWN) {
-            setState(prev => ({
-              ...prev,
-              error: `Unable to determine file type. File has ${columnCount} columns. Expected ${APP_CONFIG.FILE.BALANCE_FILE_COLUMNS} columns for Balance file or ${APP_CONFIG.FILE.POSITIONS_FILE_COLUMNS} columns for Positions file.`,
-              isProcessing: false,
-            }));
-            return;
-          }
-
-          // Enhanced validation
-          const enhancedValidation = enhancedValidator.validateCsvData(results.data, detectedType);
-
-          // Fallback to legacy validation for backward compatibility
-          const legacyValidation = validateFileData(results.data, detectedType);
-
-          // Extract only required columns by position
-          const extracted = extractRequiredColumnsFromArray(results.data, detectedType);
-
-          setState(prev => ({
-            ...prev,
-            fileType: detectedType,
-            validationResult: legacyValidation,
-            enhancedValidation,
-            processedData: extracted,
-            preview: extracted.slice(0, APP_CONFIG.FILE.PREVIEW_ROWS),
-            showRecoveryOptions: !enhancedValidation.valid && enhancedValidation.recoverable,
-            isProcessing: false,
-          }));
-
-          // Pass data to parent if validation is successful
-          if (enhancedValidation.valid) {
-            onDataImported(extracted, detectedType, enhancedValidation.summary);
-          }
-
-        } catch (parseError) {
-          setState(prev => ({
-            ...prev,
-            error: `Error processing file: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`,
-            isProcessing: false,
-          }));
-        }
-      },
-      header: false, // No headers since we're working with position-based data
-      skipEmptyLines: true,
-      error: (error: Error) => {
-        setState(prev => ({
-          ...prev,
-          error: `Error parsing CSV: ${error.message}`,
-          isProcessing: false,
-        }));
-      }
-    });
-  }, [onDataImported]);
+  const toggleWebWorker = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      useWebWorker: !prev.useWebWorker,
+    }));
+  }, []);
 
   const proceedWithWarnings = useCallback(() => {
     if (state.processedData.length > 0 && state.fileType && state.validationResult) {
@@ -257,5 +380,7 @@ export const useCsvImporter = (onDataImported: (data: any[], fileType: FileType,
     proceedWithWarnings,
     attemptRecovery,
     acceptRecoveredData,
+    toggleWebWorker,
+    workerState: csvWorker.state,
   };
 };
