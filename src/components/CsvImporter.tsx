@@ -154,7 +154,8 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
           }}>
             <strong>Flexible Import:</strong> Files with missing columns or blank cells are supported.<br/>
             • Balance files: 7-21 columns (essential: account, portfolio value, cash)<br/>
-            • Positions files: 5-12 columns (essential: account, symbol, shares)
+            • Positions files: 5-12 columns (essential: account, symbol, shares)<br/>
+            • <strong>Enhanced Date Support:</strong> M/D/YYYY, MM/DD/YYYY, YYYY-MM-DD, and 15+ other formats
           </div>
         )}
       </div>

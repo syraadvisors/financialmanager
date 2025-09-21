@@ -453,46 +453,152 @@ export class EnhancedFileValidator {
     return { errors, warnings };
   }
 
+  private parseFlexibleDate(dateValue: string): Date | null {
+    if (!dateValue?.trim()) return null;
+
+    const value = dateValue.trim();
+
+    // Helper function to try parsing with different assumptions
+    const tryParse = (dateStr: string): Date | null => {
+      try {
+        const date = new Date(dateStr);
+        return isNaN(date.getTime()) ? null : date;
+      } catch {
+        return null;
+      }
+    };
+
+    // ISO format (YYYY-MM-DD, YYYY/MM/DD)
+    if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(value)) {
+      return tryParse(value);
+    }
+
+    // YYYYMMDD format
+    if (/^\d{8}$/.test(value)) {
+      const year = value.substring(0, 4);
+      const month = value.substring(4, 6);
+      const day = value.substring(6, 8);
+      return tryParse(`${year}-${month}-${day}`);
+    }
+
+    // US format (M/D/YYYY, MM/DD/YYYY) and variations
+    const usMatch = value.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+    if (usMatch) {
+      const [, month, day, year] = usMatch;
+      const monthPadded = month.padStart(2, '0');
+      const dayPadded = day.padStart(2, '0');
+
+      // Try US format (MM/DD/YYYY)
+      const usDate = tryParse(`${monthPadded}/${dayPadded}/${year}`);
+      if (usDate) return usDate;
+
+      // Try European format (DD/MM/YYYY) as fallback
+      const eurDate = tryParse(`${dayPadded}/${monthPadded}/${year}`);
+      if (eurDate) return eurDate;
+    }
+
+    // European format with underscore separator
+    const underscoreMatch = value.match(/^(\d{1,2})_(\d{1,2})_(\d{4})$/);
+    if (underscoreMatch) {
+      const [, first, second, year] = underscoreMatch;
+      const firstPadded = first.padStart(2, '0');
+      const secondPadded = second.padStart(2, '0');
+
+      // Try MM_DD_YYYY
+      const usDate = tryParse(`${firstPadded}/${secondPadded}/${year}`);
+      if (usDate) return usDate;
+    }
+
+    // Two-digit year formats (YY variants)
+    const shortYearMatch = value.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2})$/);
+    if (shortYearMatch) {
+      const [, first, second, shortYear] = shortYearMatch;
+      // Convert 2-digit year to 4-digit (assume 20XX for 00-30, 19XX for 31-99)
+      const year = parseInt(shortYear) <= 30 ? `20${shortYear}` : `19${shortYear}`;
+      const firstPadded = first.padStart(2, '0');
+      const secondPadded = second.padStart(2, '0');
+
+      // Try MM/DD/YY format
+      return tryParse(`${firstPadded}/${secondPadded}/${year}`);
+    }
+
+    // YYMMDD format
+    if (/^\d{6}$/.test(value)) {
+      const shortYear = value.substring(0, 2);
+      const month = value.substring(2, 4);
+      const day = value.substring(4, 6);
+      // Convert 2-digit year to 4-digit
+      const year = parseInt(shortYear) <= 30 ? `20${shortYear}` : `19${shortYear}`;
+      return tryParse(`${year}-${month}-${day}`);
+    }
+
+    // YYYY-M-D format (single digit months/days)
+    const isoSingleMatch = value.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+    if (isoSingleMatch) {
+      const [, year, month, day] = isoSingleMatch;
+      const monthPadded = month.padStart(2, '0');
+      const dayPadded = day.padStart(2, '0');
+      return tryParse(`${year}-${monthPadded}-${dayPadded}`);
+    }
+
+    // Last resort: try native Date parsing
+    return tryParse(value);
+  }
+
   private validateDateEnhanced(dateValue: string, rowNum: number): {
     valid: boolean;
     errors: ValidationError[];
   } {
     const errors: ValidationError[] = [];
 
-    // Try to parse common date formats
+    // Comprehensive date format patterns
     const dateFormats = [
-      /^\d{4}-\d{2}-\d{2}$/, // YYYY-MM-DD
-      /^\d{2}\/\d{2}\/\d{4}$/, // MM/DD/YYYY
-      /^\d{2}-\d{2}-\d{4}$/, // MM-DD-YYYY
-      /^\d{8}$/, // YYYYMMDD
+      // ISO and standard formats
+      { pattern: /^\d{4}-\d{2}-\d{2}$/, name: 'YYYY-MM-DD' },
+      { pattern: /^\d{4}\/\d{2}\/\d{2}$/, name: 'YYYY/MM/DD' },
+      { pattern: /^\d{8}$/, name: 'YYYYMMDD' },
+
+      // US formats with zero-padded months/days
+      { pattern: /^\d{2}\/\d{2}\/\d{4}$/, name: 'MM/DD/YYYY' },
+      { pattern: /^\d{2}-\d{2}-\d{4}$/, name: 'MM-DD-YYYY' },
+      { pattern: /^\d{2}\.\d{2}\.\d{4}$/, name: 'MM.DD.YYYY' },
+
+      // US formats with single-digit months/days (requested formats)
+      { pattern: /^\d{1,2}\/\d{1,2}\/\d{4}$/, name: 'M/D/YYYY or MM/DD/YYYY' },
+      { pattern: /^\d{1,2}-\d{1,2}-\d{4}$/, name: 'M-D-YYYY or MM-DD-YYYY' },
+      { pattern: /^\d{1,2}\.\d{1,2}\.\d{4}$/, name: 'M.D.YYYY or MM.DD.YYYY' },
+
+      // European formats
+      { pattern: /^\d{1,2}\/\d{1,2}\/\d{4}$/, name: 'DD/MM/YYYY (European)' },
+      { pattern: /^\d{2}\/\d{2}\/\d{2}$/, name: 'MM/DD/YY or DD/MM/YY' },
+      { pattern: /^\d{1,2}\/\d{1,2}\/\d{2}$/, name: 'M/D/YY or D/M/YY' },
+
+      // Alternative separators
+      { pattern: /^\d{4}_\d{2}_\d{2}$/, name: 'YYYY_MM_DD' },
+      { pattern: /^\d{2}_\d{2}_\d{4}$/, name: 'MM_DD_YYYY' },
+      { pattern: /^\d{1,2}_\d{1,2}_\d{4}$/, name: 'M_D_YYYY' },
+
+      // Compact formats
+      { pattern: /^\d{6}$/, name: 'YYMMDD or MMDDYY' },
+      { pattern: /^\d{4}-\d{1,2}-\d{1,2}$/, name: 'YYYY-M-D' },
+      { pattern: /^\d{4}\/\d{1,2}\/\d{1,2}$/, name: 'YYYY/M/D' }
     ];
 
-    const matchesFormat = dateFormats.some(format => format.test(dateValue));
-    if (!matchesFormat) {
+    const matchedFormat = dateFormats.find(format => format.pattern.test(dateValue));
+    if (!matchedFormat) {
       errors.push({
         type: 'data',
         row: rowNum,
         column: 'date',
-        message: `Invalid date format: ${dateValue}`,
+        message: `Unrecognized date format: ${dateValue}`,
         value: dateValue,
-        suggestion: 'Use format: YYYY-MM-DD, MM/DD/YYYY, or YYYYMMDD'
+        suggestion: 'Supported formats: YYYY-MM-DD, M/D/YYYY, MM/DD/YYYY, M-D-YYYY, YYYYMMDD, and many others'
       });
       return { valid: false, errors };
     }
 
-    // Try to create a Date object
-    let parsedDate: Date | null = null;
-
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
-      parsedDate = new Date(dateValue);
-    } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateValue)) {
-      parsedDate = new Date(dateValue);
-    } else if (/^\d{8}$/.test(dateValue)) {
-      const year = dateValue.substring(0, 4);
-      const month = dateValue.substring(4, 6);
-      const day = dateValue.substring(6, 8);
-      parsedDate = new Date(`${year}-${month}-${day}`);
-    }
+    // Enhanced date parsing with multiple format support
+    const parsedDate = this.parseFlexibleDate(dateValue);
 
     if (!parsedDate || isNaN(parsedDate.getTime())) {
       errors.push({
@@ -501,24 +607,24 @@ export class EnhancedFileValidator {
         column: 'date',
         message: `Invalid date value: ${dateValue}`,
         value: dateValue,
-        suggestion: 'Ensure date values are valid calendar dates'
+        suggestion: 'Ensure date values represent valid calendar dates'
       });
       return { valid: false, errors };
     }
 
-    // Range validation
+    // Additional date validation - check for reasonable date ranges
     const now = new Date();
-    const minDate = new Date(1990, 0, 1);
-    const maxDate = new Date(now.getFullYear() + 1, 11, 31);
+    const minDate = new Date(1980, 0, 1); // Allow older financial data
+    const maxDate = new Date(now.getFullYear() + 5, 11, 31); // Allow some future dates
 
     if (parsedDate < minDate || parsedDate > maxDate) {
       errors.push({
         type: 'data',
         row: rowNum,
         column: 'date',
-        message: `Date outside valid range (1990-${now.getFullYear() + 1}): ${dateValue}`,
+        message: `Date outside reasonable range (1980-${now.getFullYear() + 5}): ${dateValue}`,
         value: dateValue,
-        suggestion: 'Check date values for typos'
+        suggestion: 'Check date values for typos or unusual date formats'
       });
       return { valid: false, errors };
     }

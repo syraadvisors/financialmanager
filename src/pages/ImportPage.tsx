@@ -316,7 +316,7 @@ const ImportPage: React.FC<ImportPageProps> = ({ onDataImported }) => {
             </ul>
           </div>
 
-          <div style={{ gridColumn: 'span 2' }}>
+          <div>
             <h4 style={{
               fontSize: '14px',
               fontWeight: '600',
@@ -336,6 +336,29 @@ const ImportPage: React.FC<ImportPageProps> = ({ onDataImported }) => {
               <li>Maximum file size: {APP_CONFIG.FILE.MAX_FILE_SIZE_MB}MB</li>
               <li>Files should not contain headers (data starts from first row)</li>
               <li>Secure local processing - data never leaves your computer</li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 style={{
+              fontSize: '14px',
+              fontWeight: '600',
+              color: '#9c27b0',
+              marginBottom: '8px',
+            }}>
+              Supported Date Formats
+            </h4>
+            <ul style={{
+              margin: 0,
+              paddingLeft: '20px',
+              fontSize: '13px',
+              color: '#666',
+              lineHeight: '1.5',
+            }}>
+              <li><strong>US formats:</strong> M/D/YYYY, MM/DD/YYYY, M-D-YYYY</li>
+              <li><strong>ISO formats:</strong> YYYY-MM-DD, YYYY/MM/DD, YYYYMMDD</li>
+              <li><strong>European:</strong> DD/MM/YYYY, DD.MM.YYYY</li>
+              <li><strong>Alternative:</strong> M_D_YYYY, YYYY-M-D, and more</li>
             </ul>
           </div>
         </div>
