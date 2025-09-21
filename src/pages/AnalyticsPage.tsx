@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { BarChart3, PieChart, TrendingUp, TrendingDown, DollarSign, Users, Target, Activity } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -6,6 +6,31 @@ import { DataProcessingErrorFallback } from '../components/ErrorFallbacks';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 
 interface AnalyticsPageProps {}
+
+interface AnalyticsData {
+  totalAccounts: number;
+  totalPortfolioValue: number;
+  totalCash: number;
+  totalPositionsValue: number;
+  cashPercentage: number;
+  investmentPercentage: number;
+  accountSizeRanges: Record<string, number>;
+  topAccounts: Array<{
+    accountNumber: string;
+    accountName: string;
+    value: number;
+    cash: number;
+  }>;
+  securityTypeDistribution: Record<string, { count: number; value: number }>;
+  topHoldings: Array<{
+    symbol: string;
+    description: string;
+    type: string;
+    value: number;
+    shares: number;
+    price: number;
+  }>;
+}
 
 const AnalyticsPage: React.FC<AnalyticsPageProps> = () => {
   const { state } = useAppContext();
@@ -16,7 +41,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = () => {
   const [calculationProgress, setCalculationProgress] = useState(0);
 
   // Calculate analytics with progressive loading
-  const analytics = useMemo(() => {
+  const analytics = useMemo((): AnalyticsData => {
     // Show loading state for heavy calculations
     setIsCalculatingAnalytics(true);
     setCalculationProgress(0);
@@ -47,7 +72,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = () => {
       return { totalAccounts, totalPortfolioValue, totalCash, totalPositionsValue };
     };
 
-    const calculateTopAccounts = (baseData: any) => {
+    const calculateTopAccounts = (baseData: Partial<AnalyticsData>) => {
         setCalculationProgress(40);
         // Top Accounts by Portfolio Value
         const topAccounts = [...balanceData]
@@ -63,7 +88,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = () => {
         return { ...baseData, topAccounts };
     };
 
-    const calculateSecurityDistribution = (baseData: any) => {
+    const calculateSecurityDistribution = (baseData: Partial<AnalyticsData>) => {
       setCalculationProgress(60);
       // Security Type Distribution
       const securityTypeDistribution = positionsData.reduce((acc, position) => {
@@ -80,7 +105,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = () => {
       return { ...baseData, securityTypeDistribution };
     };
 
-    const calculateTopHoldings = (baseData: any) => {
+    const calculateTopHoldings = (baseData: Partial<AnalyticsData>) => {
       setCalculationProgress(80);
       // Top Holdings by Market Value
       const topHoldings = [...positionsData]
@@ -98,10 +123,11 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = () => {
       return { ...baseData, topHoldings };
     };
 
-    const calculateFinalMetrics = (baseData: any) => {
+    const calculateFinalMetrics = (baseData: Partial<AnalyticsData>) => {
       setCalculationProgress(100);
       // Final calculations
-      const { totalPortfolioValue, totalCash } = baseData;
+      const totalPortfolioValue = baseData.totalPortfolioValue || 0;
+      const totalCash = baseData.totalCash || 0;
 
       // Portfolio Allocation (Cash vs Investments)
       const cashPercentage = totalPortfolioValue > 0 ? (totalCash / totalPortfolioValue) * 100 : 0;
@@ -130,7 +156,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = () => {
     };
 
     // Execute steps progressively
-    let result = calculateBaseData();
+    let result: Partial<AnalyticsData> = calculateBaseData();
     result = calculateTopAccounts(result);
     result = calculateSecurityDistribution(result);
     result = calculateTopHoldings(result);
@@ -148,7 +174,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = () => {
       setIsCalculatingAnalytics(false);
     }
 
-    return result;
+    return result as AnalyticsData;
   }, [balanceData, positionsData]);
 
   const formatCurrency = (amount: number) =>
