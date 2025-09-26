@@ -2,6 +2,26 @@
   text-align: center;
 }
 
+/* Search highlighting styles */
+.highlight {
+  background-color: #ffeb3b;
+  padding: 1px 2px;
+  border-radius: 2px;
+  font-weight: 500;
+}
+
+.highlight-0 { background-color: #ffeb3b; }
+.highlight-1 { background-color: #81c784; }
+.highlight-2 { background-color: #64b5f6; }
+.highlight-3 { background-color: #ffb74d; }
+.highlight-4 { background-color: #f06292; }
+
+/* Spin animation for loading indicators */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 .App-logo {
   height: 40vmin;
   pointer-events: none;

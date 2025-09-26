@@ -2,16 +2,19 @@ import React, { useState, Suspense, lazy } from 'react';
 import './App.css';
 import { PageType } from './types/NavigationTypes';
 import { AppProvider, useAppContext } from './contexts/AppContext';
+import { SearchProvider } from './contexts/SearchContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import Navigation from './components/Navigation';
 import ErrorTest from './components/ErrorTest';
 import LoadingSkeleton from './components/LoadingSkeleton';
+import GlobalSearch from './components/GlobalSearch';
+import AdvancedFilters from './components/AdvancedFilters';
 
 // Lazy load all page components for code splitting
 const OverviewPage = lazy(() => import('./pages/OverviewPage'));
 const ImportPage = lazy(() => import('./pages/ImportPage'));
-const BalanceDataPage = lazy(() => import('./pages/BalanceDataPage'));
-const PositionsDataPage = lazy(() => import('./pages/PositionsDataPage'));
+const BalanceDataPage = lazy(() => import('./pages/EnhancedBalanceDataPage'));
+const PositionsDataPage = lazy(() => import('./pages/EnhancedPositionsDataPage'));
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
 const HistoryPage = lazy(() => import('./pages/HistoryPage'));
 const PerformanceDashboard = lazy(() => import('./components/PerformanceDashboard'));
@@ -101,6 +104,24 @@ const AppContent: React.FC = () => {
 
       {/* Main Content */}
       <div style={{ marginLeft: '280px', flex: 1 }}>
+        {/* Global Search Bar */}
+        <div style={{
+          padding: '16px 24px',
+          backgroundColor: 'white',
+          borderBottom: '1px solid #e0e0e0',
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
+        }}>
+          <GlobalSearch
+            placeholder="Search accounts, positions, symbols..."
+            showResultsCount={true}
+            autoFocus={false}
+            size="medium"
+          />
+          <AdvancedFilters />
+        </div>
+
         {/* Development only - Error Boundary Test */}
         {process.env.NODE_ENV === 'development' && (
           <ErrorBoundary level="section">
@@ -152,11 +173,13 @@ const AppContent: React.FC = () => {
   );
 };
 
-// Root App component with Context Provider
+// Root App component with Context Providers
 const App: React.FC = () => {
   return (
     <AppProvider enablePersistence={true}>
-      <AppContent />
+      <SearchProvider>
+        <AppContent />
+      </SearchProvider>
     </AppProvider>
   );
 };
