@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Search, X, Clock, Filter, TrendingUp, Users, Target } from 'lucide-react';
 import { useSearchContext } from '../contexts/SearchContext';
+import { useAppContext } from '../contexts/AppContext';
+import { searchSuggestionEngine, SearchSuggestion } from '../utils/searchSuggestions';
+import SearchSuggestionsDropdown from './SearchSuggestionsDropdown';
 
 interface GlobalSearchProps {
   placeholder?: string;
@@ -24,9 +27,13 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
     dispatch
   } = useSearchContext();
 
+  const { state: appState } = useAppContext();
+
   const [inputValue, setInputValue] = useState(state.globalQuery);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
+  const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -52,6 +59,24 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
     setInputValue(state.globalQuery);
   }, [state.globalQuery]);
 
+  // Generate suggestions
+  const generateSuggestions = useCallback((query: string) => {
+    const newSuggestions = searchSuggestionEngine.generateSuggestions(
+      query,
+      appState.balanceData,
+      appState.positionsData,
+      {
+        maxSuggestions: 8,
+        includeRecentSearches: true,
+        includePopularSearches: true,
+        includeDataSuggestions: true,
+        includePatternSuggestions: true
+      }
+    );
+    setSuggestions(newSuggestions);
+    setSelectedSuggestionIndex(0);
+  }, [appState.balanceData, appState.positionsData]);
+
   // Debounced search
   const debouncedSearch = useCallback((query: string) => {
     if (debounceRef.current) {
@@ -70,8 +95,11 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
     setInputValue(value);
     debouncedSearch(value);
 
-    // Show suggestions if there's input
-    setShowSuggestions(value.length > 0);
+    // Generate suggestions
+    generateSuggestions(value);
+
+    // Show suggestions if there's input or when focused
+    setShowSuggestions(true);
   };
 
   const handleCompositionStart = () => {
@@ -92,18 +120,70 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
     }
   };
 
-  const handleSuggestionClick = (suggestion: string) => {
-    setInputValue(suggestion);
-    performGlobalSearch(suggestion);
+  const handleSuggestionClick = (suggestion: SearchSuggestion) => {
+    const searchText = suggestion.text;
+    setInputValue(searchText);
+    performGlobalSearch(searchText);
     setShowSuggestions(false);
+
+    // Record the search for future suggestions
+    searchSuggestionEngine.recordSearch(searchText);
+  };
+
+  const handleSuggestionSelect = (suggestion: SearchSuggestion) => {
+    handleSuggestionClick(suggestion);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      setShowSuggestions(false);
-      if (inputRef.current) {
-        inputRef.current.blur();
+    if (!showSuggestions || suggestions.length === 0) {
+      if (e.key === 'Escape') {
+        setShowSuggestions(false);
+        if (inputRef.current) {
+          inputRef.current.blur();
+        }
       }
+      return;
+    }
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev =>
+          prev < suggestions.length - 1 ? prev + 1 : 0
+        );
+        break;
+
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev =>
+          prev > 0 ? prev - 1 : suggestions.length - 1
+        );
+        break;
+
+      case 'Enter':
+        e.preventDefault();
+        if (suggestions[selectedSuggestionIndex]) {
+          handleSuggestionSelect(suggestions[selectedSuggestionIndex]);
+        } else {
+          // No suggestion selected, perform regular search
+          performGlobalSearch(inputValue);
+          setShowSuggestions(false);
+          searchSuggestionEngine.recordSearch(inputValue);
+        }
+        break;
+
+      case 'Escape':
+        e.preventDefault();
+        setShowSuggestions(false);
+        if (inputRef.current) {
+          inputRef.current.blur();
+        }
+        break;
+
+      case 'Tab':
+        // Allow tab to close suggestions without selecting
+        setShowSuggestions(false);
+        break;
     }
   };
 
@@ -220,12 +300,16 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
         <input
           ref={inputRef}
           type="text"
+          data-search="global"
           value={inputValue}
           onChange={handleInputChange}
           onCompositionStart={handleCompositionStart}
           onCompositionEnd={handleCompositionEnd}
           onKeyDown={handleKeyDown}
-          onFocus={() => inputValue.length > 0 && setShowSuggestions(true)}
+          onFocus={() => {
+            generateSuggestions(inputValue);
+            setShowSuggestions(true);
+          }}
           placeholder={placeholder}
           style={inputStyle}
           aria-label="Global search"
@@ -264,151 +348,14 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
           }} />
         )}
 
-        {/* Suggestions Dropdown */}
-        {showSuggestions && (
-          <div ref={suggestionRef} style={suggestionDropdownStyle}>
-            {/* Search History */}
-            {state.searchHistory.length > 0 && inputValue.length < 3 && (
-              <div>
-                <div style={{
-                  padding: '8px 16px',
-                  fontSize: '12px',
-                  fontWeight: '500',
-                  color: '#666',
-                  borderBottom: '1px solid #f0f0f0',
-                  backgroundColor: '#f8f9fa',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}>
-                  <Clock size={14} />
-                  Recent Searches
-                </div>
-                {state.searchHistory.slice(0, 5).map((term, index) => (
-                  <button
-                    key={index}
-                    onClick={() => handleSuggestionClick(term)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 16px',
-                      backgroundColor: 'transparent',
-                      border: 'none',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      color: '#333',
-                      transition: 'background-color 0.2s ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = '#f0f0f0';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                    }}
-                  >
-                    {term}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Search Results Preview */}
-            {hasSearchResults && inputValue.length >= 3 && (
-              <div>
-                <div style={{
-                  padding: '8px 16px',
-                  fontSize: '12px',
-                  fontWeight: '500',
-                  color: '#666',
-                  borderBottom: '1px solid #f0f0f0',
-                  backgroundColor: '#f8f9fa',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}>
-                  <Target size={14} />
-                  Search Results ({state.globalResults.totalResults})
-                </div>
-
-                {/* Balance Data Results */}
-                {state.globalResults.balanceData.length > 0 && (
-                  <div>
-                    <div style={{
-                      padding: '6px 16px',
-                      fontSize: '11px',
-                      fontWeight: '500',
-                      color: '#2196f3',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                    }}>
-                      <Users size={12} />
-                      Accounts ({state.globalResults.balanceData.length})
-                    </div>
-                    {state.globalResults.balanceData.slice(0, 3).map((account, index) => (
-                      <div
-                        key={index}
-                        style={{
-                          padding: '6px 16px 6px 32px',
-                          fontSize: '13px',
-                          color: '#666',
-                          borderLeft: '2px solid #e3f2fd',
-                          marginLeft: '14px',
-                        }}
-                      >
-                        {account.accountNumber} - {account.accountName}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Positions Data Results */}
-                {state.globalResults.positionsData.length > 0 && (
-                  <div>
-                    <div style={{
-                      padding: '6px 16px',
-                      fontSize: '11px',
-                      fontWeight: '500',
-                      color: '#4caf50',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                    }}>
-                      <TrendingUp size={12} />
-                      Positions ({state.globalResults.positionsData.length})
-                    </div>
-                    {state.globalResults.positionsData.slice(0, 3).map((position, index) => (
-                      <div
-                        key={index}
-                        style={{
-                          padding: '6px 16px 6px 32px',
-                          fontSize: '13px',
-                          color: '#666',
-                          borderLeft: '2px solid #e8f5e8',
-                          marginLeft: '14px',
-                        }}
-                      >
-                        {position.symbol} - {position.securityDescription}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* No Results */}
-            {!hasSearchResults && inputValue.length >= 3 && !state.isSearching && (
-              <div style={{
-                padding: '16px',
-                textAlign: 'center',
-                color: '#666',
-                fontSize: '14px',
-              }}>
-                No results found for "{inputValue}"
-              </div>
-            )}
-          </div>
-        )}
+        {/* Enhanced Suggestions Dropdown */}
+        <SearchSuggestionsDropdown
+          suggestions={suggestions}
+          isVisible={showSuggestions}
+          selectedIndex={selectedSuggestionIndex}
+          onSelect={handleSuggestionClick}
+          onMouseEnter={(index) => setSelectedSuggestionIndex(index)}
+        />
       </div>
 
       {/* Results Count */}

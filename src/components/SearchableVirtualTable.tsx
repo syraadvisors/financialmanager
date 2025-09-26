@@ -3,6 +3,7 @@ import { List } from 'react-window';
 import { SortAsc, SortDesc, Search } from 'lucide-react';
 import { useSearchContext } from '../contexts/SearchContext';
 import HighlightText from './HighlightText';
+import { HighlightedText } from '../utils/textHighlighting';
 
 export interface SearchableTableColumn<T = any> {
   key: keyof T;
@@ -120,13 +121,25 @@ const SearchableVirtualTable = <T extends any>({
       }
 
       if (typeof value === 'string' && searchState.highlightTerm) {
-        return <HighlightText text={value} searchTerm={searchState.highlightTerm} />;
+        return (
+          <HighlightedText
+            text={value}
+            searchTerm={searchState.highlightTerm}
+            options={{ fuzzyMatching: true, maxHighlights: 3 }}
+          />
+        );
       }
 
       if (typeof value === 'number' && searchState.highlightTerm) {
         const strValue = value.toString();
         if (strValue.includes(searchState.highlightTerm)) {
-          return <HighlightText text={strValue} searchTerm={searchState.highlightTerm} />;
+          return (
+            <HighlightedText
+              text={strValue}
+              searchTerm={searchState.highlightTerm}
+              options={{ fuzzyMatching: false, maxHighlights: 2 }}
+            />
+          );
         }
       }
 

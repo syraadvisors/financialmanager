@@ -1,4 +1,4 @@
-import React, { useState, Suspense, lazy } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import './App.css';
 import { PageType } from './types/NavigationTypes';
 import { AppProvider, useAppContext } from './contexts/AppContext';
@@ -9,6 +9,12 @@ import ErrorTest from './components/ErrorTest';
 import LoadingSkeleton from './components/LoadingSkeleton';
 import GlobalSearch from './components/GlobalSearch';
 import AdvancedFilters from './components/AdvancedFilters';
+import QuickFilters from './components/QuickFilters';
+import SearchPerformanceMonitor from './components/SearchPerformanceMonitor';
+import SearchBenchmarkDashboard from './components/SearchBenchmarkDashboard';
+import CommandPalette from './components/CommandPalette';
+import HelpModal from './components/HelpModal';
+import { useFinancialAppShortcuts } from './hooks/useKeyboardShortcuts';
 
 // Lazy load all page components for code splitting
 const OverviewPage = lazy(() => import('./pages/OverviewPage'));
@@ -25,6 +31,43 @@ const AppContent: React.FC = () => {
   const [showPerformanceDashboard, setShowPerformanceDashboard] = useState(
     process.env.NODE_ENV === 'development'
   );
+  const [showSearchPerformanceMonitor, setShowSearchPerformanceMonitor] = useState(
+    process.env.NODE_ENV === 'development'
+  );
+  const [showBenchmarkDashboard, setShowBenchmarkDashboard] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+
+  // Initialize keyboard shortcuts
+  useFinancialAppShortcuts();
+
+  // Handle custom events from keyboard shortcuts
+  useEffect(() => {
+    const handleOpenCommandPalette = () => setShowCommandPalette(true);
+    const handleTogglePerformanceDashboard = () => setShowPerformanceDashboard(prev => !prev);
+    const handleToggleSearchMonitor = () => setShowSearchPerformanceMonitor(prev => !prev);
+    const handleShowHelp = () => setShowHelpModal(true);
+    const handleGlobalEscape = () => {
+      setShowCommandPalette(false);
+      setShowBenchmarkDashboard(false);
+      setShowHelpModal(false);
+      // Clear search could be handled here
+    };
+
+    document.addEventListener('openCommandPalette', handleOpenCommandPalette);
+    document.addEventListener('togglePerformanceDashboard', handleTogglePerformanceDashboard);
+    document.addEventListener('toggleSearchMonitor', handleToggleSearchMonitor);
+    document.addEventListener('showHelp', handleShowHelp);
+    document.addEventListener('globalEscape', handleGlobalEscape);
+
+    return () => {
+      document.removeEventListener('openCommandPalette', handleOpenCommandPalette);
+      document.removeEventListener('togglePerformanceDashboard', handleTogglePerformanceDashboard);
+      document.removeEventListener('toggleSearchMonitor', handleToggleSearchMonitor);
+      document.removeEventListener('showHelp', handleShowHelp);
+      document.removeEventListener('globalEscape', handleGlobalEscape);
+    };
+  }, []);
 
   const handleExportData = async (data: any[], format: 'csv' | 'json' | 'excel') => {
     try {
@@ -120,6 +163,15 @@ const AppContent: React.FC = () => {
             size="medium"
           />
           <AdvancedFilters />
+
+          {/* Quick Filters */}
+          <div style={{ marginTop: '12px' }}>
+            <QuickFilters
+              variant="horizontal"
+              maxItems={8}
+              showCategories={false}
+            />
+          </div>
         </div>
 
         {/* Development only - Error Boundary Test */}
@@ -141,6 +193,31 @@ const AppContent: React.FC = () => {
           position="bottom-right"
         />
       </Suspense>
+
+      {/* Search Performance Monitor */}
+      <SearchPerformanceMonitor
+        isVisible={showSearchPerformanceMonitor}
+        position="bottom-left"
+        onClose={() => setShowSearchPerformanceMonitor(false)}
+      />
+
+      {/* Benchmark Dashboard */}
+      <SearchBenchmarkDashboard
+        isVisible={showBenchmarkDashboard}
+        onClose={() => setShowBenchmarkDashboard(false)}
+      />
+
+      {/* Command Palette */}
+      <CommandPalette
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+      />
+
+      {/* Help Modal */}
+      <HelpModal
+        isOpen={showHelpModal}
+        onClose={() => setShowHelpModal(false)}
+      />
 
       {/* Toggle button for performance dashboard */}
       <button
@@ -169,6 +246,63 @@ const AppContent: React.FC = () => {
       >
         📊
       </button>
+
+      {/* Toggle button for search performance monitor */}
+      <button
+        onClick={() => setShowSearchPerformanceMonitor(!showSearchPerformanceMonitor)}
+        style={{
+          position: 'fixed',
+          bottom: '70px',
+          left: showSearchPerformanceMonitor ? '320px' : '20px',
+          zIndex: 999,
+          padding: '8px',
+          backgroundColor: '#9c27b0',
+          color: 'white',
+          border: 'none',
+          borderRadius: '50%',
+          cursor: 'pointer',
+          fontSize: '12px',
+          width: '36px',
+          height: '36px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+          transition: 'left 0.3s ease',
+        }}
+        title="Toggle Search Performance Monitor"
+      >
+        🔍
+      </button>
+
+      {/* Development only - Benchmark Dashboard Toggle */}
+      {process.env.NODE_ENV === 'development' && (
+        <button
+          onClick={() => setShowBenchmarkDashboard(!showBenchmarkDashboard)}
+          style={{
+            position: 'fixed',
+            top: '20px',
+            right: '20px',
+            zIndex: 999,
+            padding: '8px',
+            backgroundColor: '#4caf50',
+            color: 'white',
+            border: 'none',
+            borderRadius: '50%',
+            cursor: 'pointer',
+            fontSize: '12px',
+            width: '36px',
+            height: '36px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+          }}
+          title="Toggle Benchmark Dashboard"
+        >
+          📊
+        </button>
+      )}
     </div>
   );
 };
