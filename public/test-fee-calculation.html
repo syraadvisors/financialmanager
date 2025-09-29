@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fee Calculation Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .test-button {
+            padding: 12px 24px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 10px;
+            font-size: 16px;
+        }
+        .test-button:hover { background: #0056b3; }
+        .result-area {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+            min-height: 200px;
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧮 Fee Calculation System Test</h1>
+        <p>This page allows you to test the fee calculation system directly.</p>
+
+        <div>
+            <button class="test-button" onclick="testFeeEngine()">Test Fee Engine</button>
+            <button class="test-button" onclick="testFeeCalculationSystem()">Run Full System Test</button>
+            <button class="test-button" onclick="runTestSuite()">Run Test Suite</button>
+        </div>
+
+        <div class="result-area" id="results">
+            <p><em>Click a button above to run tests. Results will appear here.</em></p>
+        </div>
+    </div>
+
+    <script>
+        const resultsDiv = document.getElementById('results');
+
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = type;
+            div.innerHTML = message;
+            resultsDiv.appendChild(div);
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+
+        function clearResults() {
+            resultsDiv.innerHTML = '';
+        }
+
+        async function testFeeEngine() {
+            clearResults();
+            log('<h3>🚀 Testing Fee Engine...</h3>');
+
+            try {
+                // Import the fee calculation module
+                const { FeeCalculationEngine } = await import('/src/utils/feeCalculationEngine.js');
+                const { FeeScheduleManager, BillingPeriodManager } = await import('/src/utils/feeScheduleManager.js');
+
+                log('✅ Successfully imported fee calculation modules', 'success');
+
+                // Create engine
+                const engine = new FeeCalculationEngine();
+                log('✅ Fee calculation engine created', 'success');
+
+                // Create a simple fee schedule
+                const feeSchedule = FeeScheduleManager.createFromLegacyData({
+                    fee_code: '1',
+                    flat_percent: 0.0025
+                });
+
+                engine.addFeeSchedule(feeSchedule);
+                log('✅ Fee schedule added', 'success');
+
+                // Create test client
+                const client = {
+                    id: 'test-client',
+                    name: 'Test Client',
+                    feeScheduleId: feeSchedule.id,
+                    billingFrequency: 'quarterly',
+                    accountFeeScheduleOverrides: [],
+                    clientAdjustments: [],
+                    isActive: true,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                };
+
+                engine.addClient(client);
+                log('✅ Test client added', 'success');
+
+                log('<p class="success"><strong>✅ Fee engine test completed successfully!</strong></p>');
+
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+                console.error('Fee engine test error:', error);
+            }
+        }
+
+        async function testFeeCalculationSystem() {
+            clearResults();
+            log('<h3>🧪 Running Full Fee Calculation System Test...</h3>');
+
+            try {
+                const { testFeeCalculationSystem } = await import('/src/utils/testFeeSystem.js');
+
+                log('✅ Imported test system', 'success');
+                log('<p>Running comprehensive fee calculation test...</p>');
+
+                const result = testFeeCalculationSystem();
+
+                if (result.success) {
+                    log('<p class="success"><strong>✅ System test PASSED!</strong></p>');
+                    log(`<p>Processing time: ${result.results.processingTime}ms</p>`);
+                    log(`<p>Total fees calculated: $${result.results.summary.totalFees.toLocaleString()}</p>`);
+                    log(`<p>Total clients: ${result.results.summary.totalClients}</p>`);
+                    log(`<p>Total accounts: ${result.results.summary.totalAccounts}</p>`);
+                } else {
+                    log(`<p class="error">❌ System test FAILED: ${result.error}</p>`);
+                }
+
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+                console.error('System test error:', error);
+            }
+        }
+
+        async function runTestSuite() {
+            clearResults();
+            log('<h3>📋 Running Fee Calculation Test Suite...</h3>');
+
+            try {
+                const { runFeeTests } = await import('/src/utils/runFeeCalculationTests.js');
+
+                log('✅ Imported test suite', 'success');
+                log('<p>Running all fee calculation tests...</p>');
+
+                const results = runFeeTests();
+
+                log(`<p><strong>Test Results:</strong></p>`);
+                log(`<p>✅ Passed: ${results.passed}</p>`);
+                log(`<p>❌ Failed: ${results.failed}</p>`);
+                log(`<p>📈 Success Rate: ${((results.passed / (results.passed + results.failed)) * 100).toFixed(1)}%</p>`);
+
+                if (results.failed > 0) {
+                    log('<p class="error"><strong>Failed Tests:</strong></p>');
+                    results.results
+                        .filter(result => !result.passed)
+                        .forEach(result => {
+                            log(`<p class="error">• ${result.testName}: ${result.error}</p>`);
+                        });
+                }
+
+                log('<p><strong>All Test Details:</strong></p>');
+                results.results.forEach(result => {
+                    const status = result.passed ? '✅' : '❌';
+                    const className = result.passed ? 'success' : 'error';
+                    log(`<p class="${className}">${status} ${result.testName}</p>`);
+                    if (result.details) {
+                        log(`<p style="margin-left: 20px; font-size: 14px;">${result.details}</p>`);
+                    }
+                });
+
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+                console.error('Test suite error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
