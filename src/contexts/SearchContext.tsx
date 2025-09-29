@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode, useCallback } from 'react';
 import { useAppContext } from './AppContext';
 import { AccountBalance, AccountPosition } from '../types/DataTypes';
+import { searchHistoryManager, SearchHistoryEntry } from '../utils/searchHistoryManager';
 
 // Filter types for different data fields
 export interface NumericFilter {
@@ -251,7 +252,7 @@ interface SearchContextType {
   dispatch: React.Dispatch<SearchAction>;
 
   // Search operations
-  performGlobalSearch: (query: string) => void;
+  performGlobalSearch: (query: string, source?: 'manual' | 'suggestion' | 'recent' | 'filter') => void;
   addFilter: (condition: FilterCondition) => void;
   removeFilter: (field: string) => void;
   clearAllFilters: () => void;
@@ -351,8 +352,9 @@ export const SearchProvider: React.FC<SearchProviderProps> = ({ children }) => {
     });
   }, []);
 
-  // Global search implementation
-  const performGlobalSearch = useCallback((query: string) => {
+  // Enhanced global search implementation with history tracking
+  const performGlobalSearch = useCallback((query: string, source: SearchHistoryEntry['source'] = 'manual') => {
+    const startTime = performance.now();
     dispatch({ type: 'SET_GLOBAL_QUERY', payload: query });
 
     if (!query.trim()) {
@@ -362,7 +364,7 @@ export const SearchProvider: React.FC<SearchProviderProps> = ({ children }) => {
 
     dispatch({ type: 'SET_SEARCHING', payload: true });
 
-    // Add to search history
+    // Add to context history (for immediate UI updates)
     dispatch({ type: 'ADD_TO_HISTORY', payload: query });
 
     // Search in balance data
@@ -381,11 +383,24 @@ export const SearchProvider: React.FC<SearchProviderProps> = ({ children }) => {
       totalResults: filteredBalanceData.length + filteredPositionsData.length,
     };
 
+    // Calculate execution time and add to persistent history
+    const executionTime = performance.now() - startTime;
+    const activeFilterNames = state.activeFilters.map(f => `${f.field}:${f.operator}`);
+
+    // Add to persistent search history
+    searchHistoryManager.addSearch(
+      query,
+      results.totalResults,
+      executionTime,
+      activeFilterNames,
+      source
+    );
+
     // Simulate search delay for better UX
     setTimeout(() => {
       dispatch({ type: 'SET_GLOBAL_RESULTS', payload: results });
-    }, 100);
-  }, [appState.balanceData, appState.positionsData, searchInObject]);
+    }, Math.max(100 - executionTime, 10)); // Minimum delay, adjusted for actual execution time
+  }, [appState.balanceData, appState.positionsData, searchInObject, state.activeFilters]);
 
   // Filter implementation
   const applyFilters = useCallback((filters: FilterCondition[]) => {

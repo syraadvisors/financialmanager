@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { Play, Download, BarChart3, Clock, Zap, Database, TrendingUp, AlertTriangle } from 'lucide-react';
+import React, { useState, useCallback, useMemo } from 'react';
+import { Play, Download, BarChart3, Zap, Database, TrendingUp, AlertTriangle } from 'lucide-react';
 import { benchmarkRunner, BenchmarkSuite, BenchmarkResult } from '../utils/searchBenchmark';
 
 interface SearchBenchmarkDashboardProps {
