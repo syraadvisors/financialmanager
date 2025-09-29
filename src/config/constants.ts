@@ -147,6 +147,9 @@ export const FEE_CONFIG = {
 
 // Export all configurations as a single object for easier importing
 export const APP_CONFIG = {
+  APP_NAME: 'Financial Manager',
+  APP_DESCRIPTION: 'Portfolio & Fee Management',
+  APP_VERSION: 'v1.0.0',
   FILE: FILE_CONFIG,
   VALIDATION: VALIDATION_CONFIG,
   COLUMNS: COLUMN_MAPPINGS,
