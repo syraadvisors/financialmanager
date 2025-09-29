@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Search, X, Clock, Filter, TrendingUp, Users, Target } from 'lucide-react';
+import { Search, X, Filter, History } from 'lucide-react';
 import { useSearchContext } from '../contexts/SearchContext';
 import { useAppContext } from '../contexts/AppContext';
 import { searchSuggestionEngine, SearchSuggestion } from '../utils/searchSuggestions';
 import SearchSuggestionsDropdown from './SearchSuggestionsDropdown';
+import RecentSearches from './RecentSearches';
+import { useSearchHistory } from '../utils/searchHistoryManager';
 
 interface GlobalSearchProps {
   placeholder?: string;
@@ -31,12 +33,16 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
 
   const [inputValue, setInputValue] = useState(state.globalQuery);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showRecentSearches, setShowRecentSearches] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionRef = useRef<HTMLDivElement>(null);
+  const recentSearchesRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | undefined>(undefined);
+
+  const { getRecentSearches, getPopularSearches } = useSearchHistory();
 
   // Size configurations
   const sizeConfig = {
@@ -59,23 +65,66 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
     setInputValue(state.globalQuery);
   }, [state.globalQuery]);
 
-  // Generate suggestions
+  // Enhanced suggestions with search history integration
   const generateSuggestions = useCallback((query: string) => {
+    // Get search history suggestions
+    const recentSearches = getRecentSearches(3);
+    const popularSearches = getPopularSearches(2);
+
+    // Generate AI suggestions
     const newSuggestions = searchSuggestionEngine.generateSuggestions(
       query,
       appState.balanceData,
       appState.positionsData,
       {
-        maxSuggestions: 8,
-        includeRecentSearches: true,
-        includePopularSearches: true,
+        maxSuggestions: 5,
+        includeRecentSearches: false, // We'll add these manually
+        includePopularSearches: false, // We'll add these manually
         includeDataSuggestions: true,
         includePatternSuggestions: true
       }
     );
-    setSuggestions(newSuggestions);
+
+    // Combine with history-based suggestions
+    const historySuggestions: SearchSuggestion[] = [
+      ...recentSearches.map((search, index) => ({
+        id: `recent-${search.id || index}`,
+        text: search.query,
+        category: 'recent' as const,
+        type: 'exact' as const,
+        relevanceScore: 0.9,
+        metadata: {
+          count: search.resultCount,
+          lastUsed: search.timestamp,
+          dataType: search.category
+        },
+        description: `${search.resultCount} results`
+      })),
+      ...popularSearches.map((search, index) => ({
+        id: `popular-${search.id || index}`,
+        text: search.query,
+        category: 'popular' as const,
+        type: 'exact' as const,
+        relevanceScore: 0.85,
+        metadata: {
+          count: search.resultCount,
+          lastUsed: search.timestamp,
+          dataType: search.category
+        },
+        description: `Popular • ${search.resultCount} results`
+      }))
+    ];
+
+    // Merge and deduplicate suggestions
+    const allSuggestions = [...historySuggestions, ...newSuggestions];
+    const uniqueSuggestions = allSuggestions.filter(
+      (suggestion, index, self) =>
+        self.findIndex(s => s.text.toLowerCase() === suggestion.text.toLowerCase()) === index
+    );
+
+    setSuggestions(uniqueSuggestions.slice(0, 8));
     setSelectedSuggestionIndex(0);
-  }, [appState.balanceData, appState.positionsData]);
+  }, [appState.balanceData, appState.positionsData, getRecentSearches, getPopularSearches]);
 
   // Debounced search
   const debouncedSearch = useCallback((query: string) => {
@@ -113,7 +162,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
 
   const handleClearSearch = () => {
     setInputValue('');
-    performGlobalSearch('');
+    performGlobalSearch('', 'manual');
     setShowSuggestions(false);
     if (inputRef.current) {
       inputRef.current.focus();
@@ -123,8 +172,11 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
   const handleSuggestionClick = (suggestion: SearchSuggestion) => {
     const searchText = suggestion.text;
     setInputValue(searchText);
-    performGlobalSearch(searchText);
+    performGlobalSearch(searchText, 'suggestion');
+
+    // Close both dropdowns
     setShowSuggestions(false);
+    setShowRecentSearches(false);
 
     // Record the search for future suggestions
     searchSuggestionEngine.recordSearch(searchText);
@@ -166,7 +218,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
           handleSuggestionSelect(suggestions[selectedSuggestionIndex]);
         } else {
           // No suggestion selected, perform regular search
-          performGlobalSearch(inputValue);
+          performGlobalSearch(inputValue, 'manual');
           setShowSuggestions(false);
           searchSuggestionEngine.recordSearch(inputValue);
         }
@@ -175,14 +227,16 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
       case 'Escape':
         e.preventDefault();
         setShowSuggestions(false);
+        setShowRecentSearches(false);
         if (inputRef.current) {
           inputRef.current.blur();
         }
         break;
 
       case 'Tab':
-        // Allow tab to close suggestions without selecting
+        // Allow tab to close dropdowns without selecting
         setShowSuggestions(false);
+        setShowRecentSearches(false);
         break;
     }
   };
@@ -191,16 +245,23 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
     dispatch({ type: 'TOGGLE_ADVANCED_FILTERS' });
   };
 
-  // Click outside to close suggestions
+  // Click outside to close dropdowns
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        suggestionRef.current &&
-        !suggestionRef.current.contains(event.target as Node) &&
-        inputRef.current &&
-        !inputRef.current.contains(event.target as Node)
-      ) {
+      const target = event.target as Node;
+
+      // Check if click is outside all relevant elements
+      const isOutsideInput = inputRef.current && !inputRef.current.contains(target);
+      const isOutsideSuggestions = !suggestionRef.current || !suggestionRef.current.contains(target);
+      const isOutsideRecent = !recentSearchesRef.current || !recentSearchesRef.current.contains(target);
+
+      // Also check if the click is outside the main container
+      const containerElement = inputRef.current?.parentElement;
+      const isOutsideContainer = !containerElement || !containerElement.contains(target);
+
+      if (isOutsideInput && isOutsideSuggestions && isOutsideRecent) {
         setShowSuggestions(false);
+        setShowRecentSearches(false);
       }
     };
 
@@ -283,7 +344,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
   };
 
   return (
-    <div style={containerStyle}>
+    <div className="global-search-container" style={containerStyle}>
       {/* Search Input */}
       <div
         style={{
@@ -349,13 +410,27 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
         )}
 
         {/* Enhanced Suggestions Dropdown */}
-        <SearchSuggestionsDropdown
-          suggestions={suggestions}
-          isVisible={showSuggestions}
-          selectedIndex={selectedSuggestionIndex}
-          onSelect={handleSuggestionClick}
-          onMouseEnter={(index) => setSelectedSuggestionIndex(index)}
-        />
+        <div ref={suggestionRef}>
+          <SearchSuggestionsDropdown
+            suggestions={suggestions}
+            isVisible={showSuggestions}
+            selectedIndex={selectedSuggestionIndex}
+            onSelect={handleSuggestionClick}
+            onMouseEnter={(index) => setSelectedSuggestionIndex(index)}
+          />
+        </div>
+
+        {/* Recent Searches Dropdown */}
+        <div ref={recentSearchesRef}>
+          <RecentSearches
+            isVisible={showRecentSearches}
+            variant="dropdown"
+            maxItems={8}
+            showStatistics={false}
+            showControls={true}
+            onClose={() => setShowRecentSearches(false)}
+          />
+        </div>
       </div>
 
       {/* Results Count */}
@@ -373,43 +448,86 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
         </div>
       )}
 
-      {/* Advanced Filters Toggle */}
+      {/* Controls */}
       {variant !== 'compact' && (
-        <button
-          onClick={handleToggleAdvancedFilters}
-          style={{
-            marginLeft: '8px',
-            padding: '8px 12px',
-            backgroundColor: state.showAdvancedFilters ? '#2196f3' : 'white',
-            color: state.showAdvancedFilters ? 'white' : '#666',
-            border: '2px solid #e0e0e0',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontSize: '12px',
-            fontWeight: '500',
-            transition: 'all 0.2s ease',
-            whiteSpace: 'nowrap',
-          }}
-          onMouseEnter={(e) => {
-            if (!state.showAdvancedFilters) {
-              e.currentTarget.style.backgroundColor = '#f0f0f0';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!state.showAdvancedFilters) {
-              e.currentTarget.style.backgroundColor = 'white';
-            }
-          }}
-        >
-          <Filter size={14} />
-          Filters
-        </button>
+        <div style={{ display: 'flex', gap: '8px', marginLeft: '8px' }}>
+          {/* Recent Searches Toggle */}
+          <button
+            onClick={() => {
+              setShowRecentSearches(!showRecentSearches);
+              setShowSuggestions(false);
+              if (!showRecentSearches && inputRef.current) {
+                inputRef.current.focus();
+              }
+            }}
+            style={{
+              padding: '8px 12px',
+              backgroundColor: showRecentSearches ? '#4caf50' : 'white',
+              color: showRecentSearches ? 'white' : '#666',
+              border: '2px solid #e0e0e0',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '12px',
+              fontWeight: '500',
+              transition: 'all 0.2s ease',
+              whiteSpace: 'nowrap',
+            }}
+            onMouseEnter={(e) => {
+              if (!showRecentSearches) {
+                e.currentTarget.style.backgroundColor = '#f0f0f0';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!showRecentSearches) {
+                e.currentTarget.style.backgroundColor = 'white';
+              }
+            }}
+            title="Show recent searches"
+          >
+            <History size={14} />
+            Recent
+          </button>
+
+          {/* Advanced Filters Toggle */}
+          <button
+            onClick={handleToggleAdvancedFilters}
+            style={{
+              padding: '8px 12px',
+              backgroundColor: state.showAdvancedFilters ? '#2196f3' : 'white',
+              color: state.showAdvancedFilters ? 'white' : '#666',
+              border: '2px solid #e0e0e0',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '12px',
+              fontWeight: '500',
+              transition: 'all 0.2s ease',
+              whiteSpace: 'nowrap',
+            }}
+            onMouseEnter={(e) => {
+              if (!state.showAdvancedFilters) {
+                e.currentTarget.style.backgroundColor = '#f0f0f0';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!state.showAdvancedFilters) {
+                e.currentTarget.style.backgroundColor = 'white';
+              }
+            }}
+          >
+            <Filter size={14} />
+            Filters
+          </button>
+        </div>
       )}
     </div>
   );
 };
 
-export default GlobalSearch;
+// Export with React.memo for performance optimization
+export default React.memo(GlobalSearch);

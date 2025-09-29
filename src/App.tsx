@@ -1,29 +1,65 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import './App.css';
+import './styles/searchHighlighting.css';
 import { PageType } from './types/NavigationTypes';
 import { AppProvider, useAppContext } from './contexts/AppContext';
 import { SearchProvider } from './contexts/SearchContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import Navigation from './components/Navigation';
-import ErrorTest from './components/ErrorTest';
 import LoadingSkeleton from './components/LoadingSkeleton';
-import GlobalSearch from './components/GlobalSearch';
-import AdvancedFilters from './components/AdvancedFilters';
-import QuickFilters from './components/QuickFilters';
-import SearchPerformanceMonitor from './components/SearchPerformanceMonitor';
-import SearchBenchmarkDashboard from './components/SearchBenchmarkDashboard';
-import CommandPalette from './components/CommandPalette';
-import HelpModal from './components/HelpModal';
+import {
+  createLazyComponent,
+  initializeBundleOptimization,
+  BundleMetricsDisplay
+} from './utils/bundleOptimization';
 import { useFinancialAppShortcuts } from './hooks/useKeyboardShortcuts';
 
-// Lazy load all page components for code splitting
-const OverviewPage = lazy(() => import('./pages/OverviewPage'));
-const ImportPage = lazy(() => import('./pages/ImportPage'));
-const BalanceDataPage = lazy(() => import('./pages/EnhancedBalanceDataPage'));
-const PositionsDataPage = lazy(() => import('./pages/EnhancedPositionsDataPage'));
-const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
-const HistoryPage = lazy(() => import('./pages/HistoryPage'));
-const PerformanceDashboard = lazy(() => import('./components/PerformanceDashboard'));
+// Lazy load all page components with enhanced code splitting
+const OverviewPage = createLazyComponent(
+  () => import('./pages/OverviewPage'),
+  'OverviewPage',
+  () => true // Preload overview as it's commonly accessed
+);
+
+const ImportPage = createLazyComponent(
+  () => import('./pages/ImportPage'),
+  'ImportPage'
+);
+
+const BalanceDataPage = createLazyComponent(
+  () => import('./pages/EnhancedBalanceDataPage'),
+  'BalanceDataPage'
+);
+
+const PositionsDataPage = createLazyComponent(
+  () => import('./pages/EnhancedPositionsDataPage'),
+  'PositionsDataPage'
+);
+
+const AnalyticsPage = createLazyComponent(
+  () => import('./pages/AnalyticsPage'),
+  'AnalyticsPage'
+);
+
+const HistoryPage = createLazyComponent(
+  () => import('./pages/HistoryPage'),
+  'HistoryPage'
+);
+
+const PerformanceDashboard = createLazyComponent(
+  () => import('./components/PerformanceDashboard'),
+  'PerformanceDashboard'
+);
+
+// Lazy load heavy components that are conditionally rendered
+const GlobalSearch = lazy(() => import('./components/GlobalSearch'));
+const AdvancedFilters = lazy(() => import('./components/AdvancedFilters'));
+const QuickFilters = lazy(() => import('./components/QuickFilters'));
+const SearchPerformanceMonitor = lazy(() => import('./components/SearchPerformanceMonitor'));
+const SearchBenchmarkDashboard = lazy(() => import('./components/SearchBenchmarkDashboard'));
+const CommandPalette = lazy(() => import('./components/CommandPalette'));
+const HelpModal = lazy(() => import('./components/HelpModal'));
+const ErrorTest = lazy(() => import('./components/ErrorTest'));
 
 // Main App component that uses the context
 const AppContent: React.FC = () => {
@@ -37,9 +73,15 @@ const AppContent: React.FC = () => {
   const [showBenchmarkDashboard, setShowBenchmarkDashboard] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showBundleMetrics, setShowBundleMetrics] = useState(false);
 
   // Initialize keyboard shortcuts
   useFinancialAppShortcuts();
+
+  // Initialize bundle optimization
+  useEffect(() => {
+    initializeBundleOptimization();
+  }, []);
 
   // Handle custom events from keyboard shortcuts
   useEffect(() => {
@@ -51,6 +93,7 @@ const AppContent: React.FC = () => {
       setShowCommandPalette(false);
       setShowBenchmarkDashboard(false);
       setShowHelpModal(false);
+      setShowBundleMetrics(false);
       // Clear search could be handled here
     };
 
@@ -127,7 +170,7 @@ const AppContent: React.FC = () => {
       default:
         return (
           <OverviewPage
-            onExportData={(format) => {
+            onExportData={(format: 'csv' | 'json' | 'excel') => {
               const allData = [...state.balanceData, ...state.positionsData];
               handleExportData(allData, format);
             }}
@@ -156,28 +199,37 @@ const AppContent: React.FC = () => {
           top: 0,
           zIndex: 100,
         }}>
-          <GlobalSearch
-            placeholder="Search accounts, positions, symbols..."
-            showResultsCount={true}
-            autoFocus={false}
-            size="medium"
-          />
-          <AdvancedFilters />
+          <Suspense fallback={<div style={{ height: '40px', backgroundColor: '#f5f5f5', borderRadius: '8px' }} />}>
+            <GlobalSearch
+              placeholder="Search accounts, positions, symbols... (Ctrl+F to focus)"
+              showResultsCount={true}
+              autoFocus={false}
+              size="medium"
+            />
+          </Suspense>
+
+          <Suspense fallback={null}>
+            <AdvancedFilters />
+          </Suspense>
 
           {/* Quick Filters */}
           <div style={{ marginTop: '12px' }}>
-            <QuickFilters
-              variant="horizontal"
-              maxItems={8}
-              showCategories={false}
-            />
+            <Suspense fallback={null}>
+              <QuickFilters
+                variant="horizontal"
+                maxItems={8}
+                showCategories={false}
+              />
+            </Suspense>
           </div>
         </div>
 
         {/* Development only - Error Boundary Test */}
         {process.env.NODE_ENV === 'development' && (
           <ErrorBoundary level="section">
-            <ErrorTest />
+            <Suspense fallback={null}>
+              <ErrorTest />
+            </Suspense>
           </ErrorBoundary>
         )}
 
@@ -195,28 +247,42 @@ const AppContent: React.FC = () => {
       </Suspense>
 
       {/* Search Performance Monitor */}
-      <SearchPerformanceMonitor
-        isVisible={showSearchPerformanceMonitor}
-        position="bottom-left"
-        onClose={() => setShowSearchPerformanceMonitor(false)}
-      />
+      <Suspense fallback={null}>
+        <SearchPerformanceMonitor
+          isVisible={showSearchPerformanceMonitor}
+          position="bottom-left"
+          onClose={() => setShowSearchPerformanceMonitor(false)}
+        />
+      </Suspense>
 
       {/* Benchmark Dashboard */}
-      <SearchBenchmarkDashboard
-        isVisible={showBenchmarkDashboard}
-        onClose={() => setShowBenchmarkDashboard(false)}
-      />
+      <Suspense fallback={null}>
+        <SearchBenchmarkDashboard
+          isVisible={showBenchmarkDashboard}
+          onClose={() => setShowBenchmarkDashboard(false)}
+        />
+      </Suspense>
 
       {/* Command Palette */}
-      <CommandPalette
-        isOpen={showCommandPalette}
-        onClose={() => setShowCommandPalette(false)}
-      />
+      <Suspense fallback={null}>
+        <CommandPalette
+          isOpen={showCommandPalette}
+          onClose={() => setShowCommandPalette(false)}
+        />
+      </Suspense>
 
       {/* Help Modal */}
-      <HelpModal
-        isOpen={showHelpModal}
-        onClose={() => setShowHelpModal(false)}
+      <Suspense fallback={null}>
+        <HelpModal
+          isOpen={showHelpModal}
+          onClose={() => setShowHelpModal(false)}
+        />
+      </Suspense>
+
+      {/* Bundle Metrics Display */}
+      <BundleMetricsDisplay
+        isVisible={showBundleMetrics}
+        onClose={() => setShowBundleMetrics(false)}
       />
 
       {/* Toggle button for performance dashboard */}
@@ -301,6 +367,35 @@ const AppContent: React.FC = () => {
           title="Toggle Benchmark Dashboard"
         >
           📊
+        </button>
+      )}
+
+      {/* Development only - Bundle Metrics Toggle */}
+      {process.env.NODE_ENV === 'development' && (
+        <button
+          onClick={() => setShowBundleMetrics(!showBundleMetrics)}
+          style={{
+            position: 'fixed',
+            top: '70px',
+            right: '20px',
+            zIndex: 999,
+            padding: '8px',
+            backgroundColor: '#ff9800',
+            color: 'white',
+            border: 'none',
+            borderRadius: '50%',
+            cursor: 'pointer',
+            fontSize: '12px',
+            width: '36px',
+            height: '36px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+          }}
+          title="Toggle Bundle Metrics"
+        >
+          📦
         </button>
       )}
     </div>
