@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback } from 'react';
-import { Filter, DollarSign, TrendingUp, Building, Target, Star, Clock, AlertTriangle } from 'lucide-react';
+import { DollarSign, TrendingUp, Building, Target, Star, Clock, AlertTriangle } from 'lucide-react';
 import { useSearchContext } from '../contexts/SearchContext';
 import { useAppContext } from '../contexts/AppContext';
 
@@ -200,7 +200,7 @@ const QuickFilters: React.FC<QuickFiltersProps> = ({
 
   // Handle filter click
   const handleFilterClick = useCallback((filter: QuickFilterOption) => {
-    performGlobalSearch(filter.searchQuery);
+    performGlobalSearch(filter.searchQuery, 'filter');
   }, [performGlobalSearch]);
 
   // Group filters by category
@@ -328,4 +328,5 @@ const QuickFilters: React.FC<QuickFiltersProps> = ({
   );
 };
 
-export default QuickFilters;
+// Export with React.memo for performance optimization
+export default React.memo(QuickFilters);
