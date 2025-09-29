@@ -7,6 +7,7 @@ export enum PageType {
   POSITIONS_DATA = 'positions-data',
   ANALYTICS = 'analytics',
   HISTORY = 'history',
+  FEE_MANAGEMENT = 'fee-management',
   SETTINGS = 'settings'
 }
 

@@ -46,6 +46,11 @@ const HistoryPage = createLazyComponent(
   'HistoryPage'
 );
 
+const FeeManagementPage = createLazyComponent(
+  () => import('./pages/FeeManagementPage'),
+  'FeeManagementPage'
+);
+
 const PerformanceDashboard = createLazyComponent(
   () => import('./components/PerformanceDashboard'),
   'PerformanceDashboard'
@@ -165,6 +170,10 @@ const AppContent: React.FC = () => {
       case PageType.HISTORY:
         return (
           <HistoryPage />
+        );
+      case PageType.FEE_MANAGEMENT:
+        return (
+          <FeeManagementPage />
         );
       case PageType.OVERVIEW:
       default:
