@@ -1,4 +1,4 @@
-import React, { useState, Suspense } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import {
   Calculator,
   Users,
@@ -9,6 +9,8 @@ import {
   DollarSign,
   TrendingUp
 } from 'lucide-react';
+import ClientsPage from '../components/ClientsPage';
+import AccountsPage from '../components/AccountsPage';
 
 // Lazy load the fee calculation demo
 const FeeCalculationDemo = React.lazy(() => import('../components/FeeCalculationDemo'));
@@ -44,8 +46,19 @@ const Tab: React.FC<TabProps> = ({ label, icon, isActive, onClick }) => (
   </button>
 );
 
-const FeeManagementPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('calculator');
+interface FeeManagementPageProps {
+  activeTab?: string;
+}
+
+const FeeManagementPage: React.FC<FeeManagementPageProps> = ({ activeTab: initialTab }) => {
+  const [activeTab, setActiveTab] = useState(initialTab || 'calculator');
+
+  // Update active tab when prop changes
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   const tabs = [
     {
@@ -55,7 +68,22 @@ const FeeManagementPage: React.FC = () => {
     },
     {
       id: 'clients',
-      label: 'Client Management',
+      label: 'Clients',
+      icon: <Users size={16} />,
+    },
+    {
+      id: 'accounts',
+      label: 'Accounts',
+      icon: <Users size={16} />,
+    },
+    {
+      id: 'households',
+      label: 'Households',
+      icon: <Calendar size={16} />,
+    },
+    {
+      id: 'relationships',
+      label: 'Relationships',
       icon: <Users size={16} />,
     },
     {
@@ -118,6 +146,12 @@ const FeeManagementPage: React.FC = () => {
         );
 
       case 'clients':
+        return <ClientsPage />;
+
+      case 'accounts':
+        return <AccountsPage />;
+
+      case 'households':
         return (
           <div>
             <div style={{
@@ -130,46 +164,46 @@ const FeeManagementPage: React.FC = () => {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                color: '#28a745',
+                color: '#6f42c1',
                 marginBottom: '12px'
               }}>
-                <Users size={20} />
-                Client Management
+                <Calendar size={20} />
+                Household Management
               </h3>
               <p style={{ color: '#666', marginBottom: '16px' }}>
-                Manage clients, assign fee schedules, and configure billing preferences.
+                Group accounts into households for aggregated billing. Households combine multiple accounts owned by the same family or entity.
               </p>
             </div>
 
             <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '8px', border: '1px solid #dee2e6' }}>
-              <h4 style={{ marginBottom: '16px' }}>Client Management Features</h4>
+              <h4 style={{ marginBottom: '16px' }}>Household Features</h4>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
-                <div style={{ padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '6px' }}>
-                  <h5 style={{ color: '#007bff', marginBottom: '8px' }}>👤 Client Profiles</h5>
+                <div style={{ padding: '16px', backgroundColor: '#f3e8ff', borderRadius: '6px', border: '1px solid #d8b3ff' }}>
+                  <h5 style={{ color: '#6f42c1', marginBottom: '8px' }}>👥 Account Aggregation</h5>
                   <p style={{ fontSize: '14px', color: '#666', margin: 0 }}>
-                    Create and manage client profiles with contact information, preferences, and account assignments.
+                    Combine multiple accounts into a single household for consolidated fee billing.
                   </p>
                 </div>
 
-                <div style={{ padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '6px' }}>
-                  <h5 style={{ color: '#007bff', marginBottom: '8px' }}>📋 Fee Schedule Assignment</h5>
+                <div style={{ padding: '16px', backgroundColor: '#f3e8ff', borderRadius: '6px', border: '1px solid #d8b3ff' }}>
+                  <h5 style={{ color: '#6f42c1', marginBottom: '8px' }}>💰 Aggregated Billing</h5>
                   <p style={{ fontSize: '14px', color: '#666', margin: 0 }}>
-                    Assign fee schedules to clients and configure account-level overrides.
+                    Calculate fees based on total household assets across all member accounts.
                   </p>
                 </div>
 
-                <div style={{ padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '6px' }}>
-                  <h5 style={{ color: '#007bff', marginBottom: '8px' }}>⚙️ Billing Preferences</h5>
+                <div style={{ padding: '16px', backgroundColor: '#f3e8ff', borderRadius: '6px', border: '1px solid #d8b3ff' }}>
+                  <h5 style={{ color: '#6f42c1', marginBottom: '8px' }}>🏢 Relationship Assignment</h5>
                   <p style={{ fontSize: '14px', color: '#666', margin: 0 }}>
-                    Set billing frequency, payment methods, and custom adjustments.
+                    Assign households to relationships for multi-household billing scenarios.
                   </p>
                 </div>
 
-                <div style={{ padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '6px' }}>
-                  <h5 style={{ color: '#007bff', marginBottom: '8px' }}>📊 Client Analytics</h5>
+                <div style={{ padding: '16px', backgroundColor: '#f3e8ff', borderRadius: '6px', border: '1px solid #d8b3ff' }}>
+                  <h5 style={{ color: '#6f42c1', marginBottom: '8px' }}>📊 Household Analytics</h5>
                   <p style={{ fontSize: '14px', color: '#666', margin: 0 }}>
-                    View client portfolio summaries, fee history, and performance metrics.
+                    View aggregated portfolio values, fee totals, and account summaries per household.
                   </p>
                 </div>
               </div>
@@ -190,7 +224,87 @@ const FeeManagementPage: React.FC = () => {
                   gap: '8px'
                 }}>
                   <Settings size={16} />
-                  <strong>Coming Soon:</strong> Full client management interface with CRUD operations, search, and filtering.
+                  <strong>Coming Soon:</strong> Full household management with account assignment and billing configuration.
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'relationships':
+        return (
+          <div>
+            <div style={{
+              padding: '20px',
+              backgroundColor: '#f8f9fa',
+              borderRadius: '8px',
+              marginBottom: '20px',
+            }}>
+              <h3 style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                color: '#dc3545',
+                marginBottom: '12px'
+              }}>
+                <Users size={20} />
+                Relationship Management
+              </h3>
+              <p style={{ color: '#666', marginBottom: '16px' }}>
+                Group households into relationships for the highest level of billing aggregation. Perfect for multi-generational families or complex business structures.
+              </p>
+            </div>
+
+            <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '8px', border: '1px solid #dee2e6' }}>
+              <h4 style={{ marginBottom: '16px' }}>Relationship Features</h4>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+                <div style={{ padding: '16px', backgroundColor: '#fff5f5', borderRadius: '6px', border: '1px solid #ffb3b3' }}>
+                  <h5 style={{ color: '#dc3545', marginBottom: '8px' }}>🏢 Multi-Household Billing</h5>
+                  <p style={{ fontSize: '14px', color: '#666', margin: 0 }}>
+                    Combine multiple households into a relationship for enterprise-level billing.
+                  </p>
+                </div>
+
+                <div style={{ padding: '16px', backgroundColor: '#fff5f5', borderRadius: '6px', border: '1px solid #ffb3b3' }}>
+                  <h5 style={{ color: '#dc3545', marginBottom: '8px' }}>📈 Tiered Fee Structures</h5>
+                  <p style={{ fontSize: '14px', color: '#666', margin: 0 }}>
+                    Apply tiered fee schedules across all households in the relationship.
+                  </p>
+                </div>
+
+                <div style={{ padding: '16px', backgroundColor: '#fff5f5', borderRadius: '6px', border: '1px solid #ffb3b3' }}>
+                  <h5 style={{ color: '#dc3545', marginBottom: '8px' }}>💼 Business Structures</h5>
+                  <p style={{ fontSize: '14px', color: '#666', margin: 0 }}>
+                    Support complex billing for business clients with multiple entities and accounts.
+                  </p>
+                </div>
+
+                <div style={{ padding: '16px', backgroundColor: '#fff5f5', borderRadius: '6px', border: '1px solid #ffb3b3' }}>
+                  <h5 style={{ color: '#dc3545', marginBottom: '8px' }}>📊 Relationship Analytics</h5>
+                  <p style={{ fontSize: '14px', color: '#666', margin: 0 }}>
+                    View total assets under management and consolidated reporting across the entire relationship.
+                  </p>
+                </div>
+              </div>
+
+              <div style={{
+                marginTop: '24px',
+                padding: '16px',
+                backgroundColor: '#fff3cd',
+                border: '1px solid #ffeaa7',
+                borderRadius: '6px',
+              }}>
+                <p style={{
+                  margin: 0,
+                  fontSize: '14px',
+                  color: '#856404',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <Settings size={16} />
+                  <strong>Coming Soon:</strong> Full relationship management with household assignment and advanced billing rules.
                 </p>
               </div>
             </div>
@@ -469,53 +583,6 @@ const FeeManagementPage: React.FC = () => {
 
   return (
     <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{
-        marginBottom: '32px',
-        paddingBottom: '24px',
-        borderBottom: '2px solid #dee2e6',
-      }}>
-        <h1 style={{
-          fontSize: '28px',
-          fontWeight: 'bold',
-          color: '#333',
-          marginBottom: '8px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px'
-        }}>
-          <Calculator size={32} style={{ color: '#007bff' }} />
-          Fee Management System
-        </h1>
-        <p style={{
-          fontSize: '16px',
-          color: '#666',
-          margin: 0,
-          maxWidth: '600px'
-        }}>
-          Comprehensive fee calculation, client management, and billing administration platform.
-        </p>
-      </div>
-
-      {/* Tab Navigation */}
-      <div style={{
-        display: 'flex',
-        borderBottom: '1px solid #dee2e6',
-        marginBottom: '24px',
-        overflowX: 'auto',
-      }}>
-        {tabs.map((tab) => (
-          <Tab
-            key={tab.id}
-            id={tab.id}
-            label={tab.label}
-            icon={tab.icon}
-            isActive={activeTab === tab.id}
-            onClick={() => setActiveTab(tab.id)}
-          />
-        ))}
-      </div>
-
       {/* Tab Content */}
       <div style={{ minHeight: '500px' }}>
         {renderTabContent()}

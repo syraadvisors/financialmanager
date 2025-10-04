@@ -9,8 +9,7 @@ import Navigation from './components/Navigation';
 import LoadingSkeleton from './components/LoadingSkeleton';
 import {
   createLazyComponent,
-  initializeBundleOptimization,
-  BundleMetricsDisplay
+  initializeBundleOptimization
 } from './utils/bundleOptimization';
 import { useFinancialAppShortcuts } from './hooks/useKeyboardShortcuts';
 
@@ -51,34 +50,18 @@ const FeeManagementPage = createLazyComponent(
   'FeeManagementPage'
 );
 
-const PerformanceDashboard = createLazyComponent(
-  () => import('./components/PerformanceDashboard'),
-  'PerformanceDashboard'
-);
-
 // Lazy load heavy components that are conditionally rendered
 const GlobalSearch = lazy(() => import('./components/GlobalSearch'));
 const AdvancedFilters = lazy(() => import('./components/AdvancedFilters'));
 const QuickFilters = lazy(() => import('./components/QuickFilters'));
-const SearchPerformanceMonitor = lazy(() => import('./components/SearchPerformanceMonitor'));
-const SearchBenchmarkDashboard = lazy(() => import('./components/SearchBenchmarkDashboard'));
 const CommandPalette = lazy(() => import('./components/CommandPalette'));
 const HelpModal = lazy(() => import('./components/HelpModal'));
-const ErrorTest = lazy(() => import('./components/ErrorTest'));
 
 // Main App component that uses the context
 const AppContent: React.FC = () => {
   const { state, setCurrentPage, handleDataImported } = useAppContext();
-  const [showPerformanceDashboard, setShowPerformanceDashboard] = useState(
-    process.env.NODE_ENV === 'development'
-  );
-  const [showSearchPerformanceMonitor, setShowSearchPerformanceMonitor] = useState(
-    process.env.NODE_ENV === 'development'
-  );
-  const [showBenchmarkDashboard, setShowBenchmarkDashboard] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
-  const [showBundleMetrics, setShowBundleMetrics] = useState(false);
 
   // Initialize keyboard shortcuts
   useFinancialAppShortcuts();
@@ -91,27 +74,19 @@ const AppContent: React.FC = () => {
   // Handle custom events from keyboard shortcuts
   useEffect(() => {
     const handleOpenCommandPalette = () => setShowCommandPalette(true);
-    const handleTogglePerformanceDashboard = () => setShowPerformanceDashboard(prev => !prev);
-    const handleToggleSearchMonitor = () => setShowSearchPerformanceMonitor(prev => !prev);
     const handleShowHelp = () => setShowHelpModal(true);
     const handleGlobalEscape = () => {
       setShowCommandPalette(false);
-      setShowBenchmarkDashboard(false);
       setShowHelpModal(false);
-      setShowBundleMetrics(false);
       // Clear search could be handled here
     };
 
     document.addEventListener('openCommandPalette', handleOpenCommandPalette);
-    document.addEventListener('togglePerformanceDashboard', handleTogglePerformanceDashboard);
-    document.addEventListener('toggleSearchMonitor', handleToggleSearchMonitor);
     document.addEventListener('showHelp', handleShowHelp);
     document.addEventListener('globalEscape', handleGlobalEscape);
 
     return () => {
       document.removeEventListener('openCommandPalette', handleOpenCommandPalette);
-      document.removeEventListener('togglePerformanceDashboard', handleTogglePerformanceDashboard);
-      document.removeEventListener('toggleSearchMonitor', handleToggleSearchMonitor);
       document.removeEventListener('showHelp', handleShowHelp);
       document.removeEventListener('globalEscape', handleGlobalEscape);
     };
@@ -171,9 +146,25 @@ const AppContent: React.FC = () => {
         return (
           <HistoryPage />
         );
-      case PageType.FEE_MANAGEMENT:
+      case PageType.FEE_CALCULATOR:
+      case PageType.CLIENTS:
+      case PageType.ACCOUNTS:
+      case PageType.HOUSEHOLDS:
+      case PageType.RELATIONSHIPS:
+      case PageType.FEE_SCHEDULES:
+      case PageType.BILLING_PERIODS:
+      case PageType.FEE_REPORTS:
         return (
-          <FeeManagementPage />
+          <FeeManagementPage activeTab={
+            state.currentPage === PageType.FEE_CALCULATOR ? 'calculator' :
+            state.currentPage === PageType.CLIENTS ? 'clients' :
+            state.currentPage === PageType.ACCOUNTS ? 'accounts' :
+            state.currentPage === PageType.HOUSEHOLDS ? 'households' :
+            state.currentPage === PageType.RELATIONSHIPS ? 'relationships' :
+            state.currentPage === PageType.FEE_SCHEDULES ? 'schedules' :
+            state.currentPage === PageType.BILLING_PERIODS ? 'billing' :
+            state.currentPage === PageType.FEE_REPORTS ? 'reports' : 'calculator'
+          } />
         );
       case PageType.OVERVIEW:
       default:
@@ -233,44 +224,10 @@ const AppContent: React.FC = () => {
           </div>
         </div>
 
-        {/* Development only - Error Boundary Test */}
-        {process.env.NODE_ENV === 'development' && (
-          <ErrorBoundary level="section">
-            <Suspense fallback={null}>
-              <ErrorTest />
-            </Suspense>
-          </ErrorBoundary>
-        )}
-
         <Suspense fallback={<LoadingSkeleton type="page" />}>
           {renderCurrentPage()}
         </Suspense>
       </div>
-
-      {/* Performance Dashboard */}
-      <Suspense fallback={null}>
-        <PerformanceDashboard
-          isVisible={showPerformanceDashboard}
-          position="bottom-right"
-        />
-      </Suspense>
-
-      {/* Search Performance Monitor */}
-      <Suspense fallback={null}>
-        <SearchPerformanceMonitor
-          isVisible={showSearchPerformanceMonitor}
-          position="bottom-left"
-          onClose={() => setShowSearchPerformanceMonitor(false)}
-        />
-      </Suspense>
-
-      {/* Benchmark Dashboard */}
-      <Suspense fallback={null}>
-        <SearchBenchmarkDashboard
-          isVisible={showBenchmarkDashboard}
-          onClose={() => setShowBenchmarkDashboard(false)}
-        />
-      </Suspense>
 
       {/* Command Palette */}
       <Suspense fallback={null}>
@@ -287,126 +244,6 @@ const AppContent: React.FC = () => {
           onClose={() => setShowHelpModal(false)}
         />
       </Suspense>
-
-      {/* Bundle Metrics Display */}
-      <BundleMetricsDisplay
-        isVisible={showBundleMetrics}
-        onClose={() => setShowBundleMetrics(false)}
-      />
-
-      {/* Toggle button for performance dashboard */}
-      <button
-        onClick={() => setShowPerformanceDashboard(!showPerformanceDashboard)}
-        style={{
-          position: 'fixed',
-          bottom: '20px',
-          right: showPerformanceDashboard ? '340px' : '20px',
-          zIndex: 999,
-          padding: '8px',
-          backgroundColor: '#2196f3',
-          color: 'white',
-          border: 'none',
-          borderRadius: '50%',
-          cursor: 'pointer',
-          fontSize: '12px',
-          width: '36px',
-          height: '36px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-          transition: 'right 0.3s ease',
-        }}
-        title="Toggle Performance Dashboard"
-      >
-        📊
-      </button>
-
-      {/* Toggle button for search performance monitor */}
-      <button
-        onClick={() => setShowSearchPerformanceMonitor(!showSearchPerformanceMonitor)}
-        style={{
-          position: 'fixed',
-          bottom: '70px',
-          left: showSearchPerformanceMonitor ? '320px' : '20px',
-          zIndex: 999,
-          padding: '8px',
-          backgroundColor: '#9c27b0',
-          color: 'white',
-          border: 'none',
-          borderRadius: '50%',
-          cursor: 'pointer',
-          fontSize: '12px',
-          width: '36px',
-          height: '36px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-          transition: 'left 0.3s ease',
-        }}
-        title="Toggle Search Performance Monitor"
-      >
-        🔍
-      </button>
-
-      {/* Development only - Benchmark Dashboard Toggle */}
-      {process.env.NODE_ENV === 'development' && (
-        <button
-          onClick={() => setShowBenchmarkDashboard(!showBenchmarkDashboard)}
-          style={{
-            position: 'fixed',
-            top: '20px',
-            right: '20px',
-            zIndex: 999,
-            padding: '8px',
-            backgroundColor: '#4caf50',
-            color: 'white',
-            border: 'none',
-            borderRadius: '50%',
-            cursor: 'pointer',
-            fontSize: '12px',
-            width: '36px',
-            height: '36px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-          }}
-          title="Toggle Benchmark Dashboard"
-        >
-          📊
-        </button>
-      )}
-
-      {/* Development only - Bundle Metrics Toggle */}
-      {process.env.NODE_ENV === 'development' && (
-        <button
-          onClick={() => setShowBundleMetrics(!showBundleMetrics)}
-          style={{
-            position: 'fixed',
-            top: '70px',
-            right: '20px',
-            zIndex: 999,
-            padding: '8px',
-            backgroundColor: '#ff9800',
-            color: 'white',
-            border: 'none',
-            borderRadius: '50%',
-            cursor: 'pointer',
-            fontSize: '12px',
-            width: '36px',
-            height: '36px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-          }}
-          title="Toggle Bundle Metrics"
-        >
-          📦
-        </button>
-      )}
     </div>
   );
 };

@@ -7,7 +7,14 @@ export enum PageType {
   POSITIONS_DATA = 'positions-data',
   ANALYTICS = 'analytics',
   HISTORY = 'history',
-  FEE_MANAGEMENT = 'fee-management',
+  FEE_CALCULATOR = 'fee-calculator',
+  CLIENTS = 'clients',
+  ACCOUNTS = 'accounts',
+  HOUSEHOLDS = 'households',
+  RELATIONSHIPS = 'relationships',
+  FEE_SCHEDULES = 'fee-schedules',
+  BILLING_PERIODS = 'billing-periods',
+  FEE_REPORTS = 'fee-reports',
   SETTINGS = 'settings'
 }
 

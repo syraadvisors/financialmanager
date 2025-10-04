@@ -9,7 +9,13 @@ import {
   Settings,
   Calculator,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Users,
+  FileText,
+  Calendar,
+  Home,
+  Building2,
+  UserCircle
 } from 'lucide-react';
 import { PageType, NavigationItem, AppState } from '../types/NavigationTypes';
 import { APP_CONFIG } from '../config/constants';
@@ -31,6 +37,12 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
       analytics: <PieChart size={size} />,
       history: <History size={size} />,
       calculator: <Calculator size={size} />,
+      usercircle: <UserCircle size={size} />,
+      users: <Users size={size} />,
+      home: <Home size={size} />,
+      building: <Building2 size={size} />,
+      filetext: <FileText size={size} />,
+      calendar: <Calendar size={size} />,
       settings: <Settings size={size} />,
     };
     return iconMap[iconName] || <Database size={size} />;
@@ -55,17 +67,59 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
 
   const navigationItems: NavigationItem[] = [
     {
-      id: PageType.IMPORT,
-      title: 'Data Import',
-      description: 'Import CSV files',
-      icon: 'upload',
-      requiresData: 'none',
-    },
-    {
       id: PageType.OVERVIEW,
       title: 'Overview',
       description: 'Summary dashboard',
       icon: 'overview',
+      requiresData: 'none',
+    },
+    {
+      id: PageType.CLIENTS,
+      title: 'Clients',
+      description: 'Manage clients',
+      icon: 'usercircle',
+      requiresData: 'none',
+    },
+    {
+      id: PageType.ACCOUNTS,
+      title: 'Accounts',
+      description: 'Manage accounts',
+      icon: 'users',
+      requiresData: 'none',
+    },
+    {
+      id: PageType.HOUSEHOLDS,
+      title: 'Households',
+      description: 'Manage households',
+      icon: 'home',
+      requiresData: 'none',
+    },
+    {
+      id: PageType.RELATIONSHIPS,
+      title: 'Relationships',
+      description: 'Manage relationships',
+      icon: 'building',
+      requiresData: 'none',
+    },
+    {
+      id: PageType.FEE_SCHEDULES,
+      title: 'Fee Schedules',
+      description: 'Configure schedules',
+      icon: 'filetext',
+      requiresData: 'none',
+    },
+    {
+      id: PageType.BILLING_PERIODS,
+      title: 'Billing Periods',
+      description: 'Manage billing',
+      icon: 'calendar',
+      requiresData: 'none',
+    },
+    {
+      id: PageType.IMPORT,
+      title: 'Data Import',
+      description: 'Import CSV files',
+      icon: 'upload',
       requiresData: 'none',
     },
     {
@@ -85,13 +139,6 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
       badge: appState.positionsData.length || undefined,
     },
     {
-      id: PageType.ANALYTICS,
-      title: 'Analytics',
-      description: 'Data insights',
-      icon: 'analytics',
-      requiresData: 'both',
-    },
-    {
       id: PageType.HISTORY,
       title: 'Import History',
       description: 'Previous imports',
@@ -100,10 +147,17 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
       badge: appState.fileHistory.length || undefined,
     },
     {
-      id: PageType.FEE_MANAGEMENT,
-      title: 'Fee Management',
-      description: 'Manage fees & billing',
+      id: PageType.FEE_CALCULATOR,
+      title: 'Fee Calculator',
+      description: 'Calculate fees',
       icon: 'calculator',
+      requiresData: 'none',
+    },
+    {
+      id: PageType.FEE_REPORTS,
+      title: 'Fee Reports',
+      description: 'View reports',
+      icon: 'analytics',
       requiresData: 'none',
     },
   ];
