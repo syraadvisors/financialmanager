@@ -50,6 +50,11 @@ const FeeManagementPage = createLazyComponent(
   'FeeManagementPage'
 );
 
+const FirmSettingsPage = createLazyComponent(
+  () => import('./pages/FirmSettingsPage'),
+  'FirmSettingsPage'
+);
+
 // Lazy load heavy components that are conditionally rendered
 const GlobalSearch = lazy(() => import('./components/GlobalSearch'));
 const AdvancedFilters = lazy(() => import('./components/AdvancedFilters'));
@@ -62,6 +67,7 @@ const AppContent: React.FC = () => {
   const { state, setCurrentPage, handleDataImported } = useAppContext();
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [isNavCollapsed, setIsNavCollapsed] = useState(false);
 
   // Initialize keyboard shortcuts
   useFinancialAppShortcuts();
@@ -149,6 +155,7 @@ const AppContent: React.FC = () => {
       case PageType.FEE_CALCULATOR:
       case PageType.CLIENTS:
       case PageType.ACCOUNTS:
+      case PageType.MASTER_ACCOUNTS:
       case PageType.HOUSEHOLDS:
       case PageType.RELATIONSHIPS:
       case PageType.FEE_SCHEDULES:
@@ -159,6 +166,7 @@ const AppContent: React.FC = () => {
             state.currentPage === PageType.FEE_CALCULATOR ? 'calculator' :
             state.currentPage === PageType.CLIENTS ? 'clients' :
             state.currentPage === PageType.ACCOUNTS ? 'accounts' :
+            state.currentPage === PageType.MASTER_ACCOUNTS ? 'master-accounts' :
             state.currentPage === PageType.HOUSEHOLDS ? 'households' :
             state.currentPage === PageType.RELATIONSHIPS ? 'relationships' :
             state.currentPage === PageType.FEE_SCHEDULES ? 'schedules' :
@@ -166,6 +174,8 @@ const AppContent: React.FC = () => {
             state.currentPage === PageType.FEE_REPORTS ? 'reports' : 'calculator'
           } />
         );
+      case PageType.FIRM_SETTINGS:
+        return <FirmSettingsPage />;
       case PageType.OVERVIEW:
       default:
         return (
@@ -186,10 +196,16 @@ const AppContent: React.FC = () => {
         currentPage={state.currentPage}
         onPageChange={setCurrentPage}
         appState={state}
+        isCollapsed={isNavCollapsed}
+        onToggleCollapse={setIsNavCollapsed}
       />
 
       {/* Main Content */}
-      <div style={{ marginLeft: '280px', flex: 1 }}>
+      <div style={{
+        marginLeft: isNavCollapsed ? '80px' : '280px',
+        flex: 1,
+        transition: 'margin-left 0.3s ease'
+      }}>
         {/* Global Search Bar */}
         <div style={{
           padding: '16px 24px',

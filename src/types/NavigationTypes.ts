@@ -10,12 +10,14 @@ export enum PageType {
   FEE_CALCULATOR = 'fee-calculator',
   CLIENTS = 'clients',
   ACCOUNTS = 'accounts',
+  MASTER_ACCOUNTS = 'master-accounts',
   HOUSEHOLDS = 'households',
   RELATIONSHIPS = 'relationships',
   FEE_SCHEDULES = 'fee-schedules',
   BILLING_PERIODS = 'billing-periods',
   FEE_REPORTS = 'fee-reports',
-  SETTINGS = 'settings'
+  SETTINGS = 'settings',
+  FIRM_SETTINGS = 'firm-settings'
 }
 
 export interface NavigationItem {

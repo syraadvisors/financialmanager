@@ -13,7 +13,8 @@ import {
   DollarSign,
   Users
 } from 'lucide-react';
-import { Account, AccountStatus, ReconciliationStatus, AccountMismatch } from '../types/Account';
+import { Account, AccountStatus, ReconciliationStatus, AccountMismatch, AccountFormData } from '../types/Account';
+import AccountFormModal from './AccountFormModal';
 
 const AccountsPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -23,6 +24,8 @@ const AccountsPage: React.FC = () => {
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isOffboardModalOpen, setIsOffboardModalOpen] = useState(false);
   const [isLinkAccountModalOpen, setIsLinkAccountModalOpen] = useState(false);
+  const [isAccountFormModalOpen, setIsAccountFormModalOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
 
   // Mock data - in production, this would come from API/state management
@@ -123,6 +126,58 @@ const AccountsPage: React.FC = () => {
     { id: '4', name: 'Jane Doe' },
     { id: '5', name: 'Robert Johnson' },
   ];
+
+  // Mock households for account form
+  const mockHouseholds = [
+    { id: 'HH-001', name: 'Smith Family' },
+    { id: 'HH-002', name: 'Johnson Family' },
+    { id: 'HH-003', name: 'Doe Family' },
+  ];
+
+  // Mock fee schedules for account form
+  const mockFeeSchedules = [
+    { id: 'FS-001', name: 'Standard Tiered' },
+    { id: 'FS-002', name: 'Premium Flat' },
+    { id: 'FS-003', name: 'Corporate Standard' },
+  ];
+
+  // Mock master accounts for account form
+  const mockMasterAccounts = [
+    { id: 'MA-001', masterAccountNumber: 'MA-12345', masterAccountName: 'Primary Master Account' },
+    { id: 'MA-002', masterAccountNumber: 'MA-67890', masterAccountName: 'Secondary Master Account' },
+  ];
+
+  const handleAddAccount = () => {
+    setEditingAccount(null);
+    setIsAccountFormModalOpen(true);
+  };
+
+  const handleEditAccount = (account: Account) => {
+    setEditingAccount(account);
+    setIsAccountFormModalOpen(true);
+  };
+
+  const handleSaveAccount = (accountData: AccountFormData) => {
+    if (accountData.id) {
+      // Update existing account
+      setAccounts(prev => prev.map(acc =>
+        acc.id === accountData.id
+          ? { ...acc, ...accountData, updatedAt: new Date() }
+          : acc
+      ));
+    } else {
+      // Create new account
+      const newAccount: Account = {
+        ...accountData,
+        id: (accounts.length + 1).toString(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as Account;
+      setAccounts(prev => [...prev, newAccount]);
+    }
+    setIsAccountFormModalOpen(false);
+    setEditingAccount(null);
+  };
 
   const handleAssignClick = (account: Account) => {
     setSelectedAccount(account);
@@ -327,25 +382,46 @@ const AccountsPage: React.FC = () => {
             Manage accounts and reconcile with custodian data
           </p>
         </div>
-        <button
-          onClick={() => setIsLinkAccountModalOpen(true)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '12px 20px',
-            backgroundColor: '#2196f3',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: 'bold',
-          }}
-        >
-          <Plus size={18} />
-          Link New Account
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button
+            onClick={handleAddAccount}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 20px',
+              backgroundColor: '#2196f3',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 'bold',
+            }}
+          >
+            <Plus size={18} />
+            Add Account
+          </button>
+          <button
+            onClick={() => setIsLinkAccountModalOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 20px',
+              backgroundColor: 'white',
+              color: '#2196f3',
+              border: '2px solid #2196f3',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 'bold',
+            }}
+          >
+            <Link2 size={18} />
+            Link Existing
+          </button>
+        </div>
       </div>
 
       {/* Mismatch Alert Banner */}
@@ -651,6 +727,7 @@ const AccountsPage: React.FC = () => {
                         </button>
                       )}
                       <button
+                        onClick={() => handleEditAccount(account)}
                         style={{
                           padding: '6px',
                           backgroundColor: 'transparent',
@@ -719,6 +796,21 @@ const AccountsPage: React.FC = () => {
           onClose={() => setIsLinkAccountModalOpen(false)}
         />
       )}
+
+      {/* Account Form Modal */}
+      <AccountFormModal
+        isOpen={isAccountFormModalOpen}
+        onClose={() => {
+          setIsAccountFormModalOpen(false);
+          setEditingAccount(null);
+        }}
+        onSave={handleSaveAccount}
+        account={editingAccount}
+        availableClients={mockClients}
+        availableHouseholds={mockHouseholds}
+        availableFeeSchedules={mockFeeSchedules}
+        availableMasterAccounts={mockMasterAccounts}
+      />
     </div>
   );
 };

@@ -45,6 +45,7 @@ export interface Account {
   clientName?: string;
   householdId?: string;
   householdName?: string;
+  masterAccountId?: string;
 
   // Custodian Data
   custodianAccountId?: string;
