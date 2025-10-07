@@ -1,4 +1,5 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { Routes, Route } from 'react-router-dom';
 import './App.css';
 import './styles/searchHighlighting.css';
 import { PageType } from './types/NavigationTypes';
@@ -7,6 +8,9 @@ import { SearchProvider } from './contexts/SearchContext';
 import { FirmProvider } from './contexts/FirmContext';
 import Navigation from './components/Navigation';
 import LoadingSkeleton from './components/LoadingSkeleton';
+import LoginPage from './components/LoginPage';
+import AuthCallback from './components/AuthCallback';
+import ProtectedRoute from './components/ProtectedRoute';
 import {
   createLazyComponent,
   initializeBundleOptimization
@@ -264,20 +268,34 @@ const AppContent: React.FC = () => {
   );
 };
 
-// Root App component with Context Providers
+// Root App component with Context Providers and Routing
 const App: React.FC = () => {
   // Firm ID for Test Financial Advisors (from Supabase)
   // This will be replaced with JWT-based auth when Google OAuth is implemented
   const DEFAULT_FIRM_ID = 'fb5368e4-ea10-48cc-becf-62580dca0895';
 
   return (
-    <AppProvider enablePersistence={true}>
-      <FirmProvider defaultFirmId={DEFAULT_FIRM_ID}>
-        <SearchProvider>
-          <AppContent />
-        </SearchProvider>
-      </FirmProvider>
-    </AppProvider>
+    <Routes>
+      {/* Public routes */}
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
+
+      {/* Protected routes */}
+      <Route
+        path="/*"
+        element={
+          <ProtectedRoute>
+            <AppProvider enablePersistence={true}>
+              <FirmProvider defaultFirmId={DEFAULT_FIRM_ID}>
+                <SearchProvider>
+                  <AppContent />
+                </SearchProvider>
+              </FirmProvider>
+            </AppProvider>
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
   );
 };
 

@@ -14,7 +14,9 @@
       "Bash(npm install:*)",
       "Bash(taskkill:*)",
       "Bash(tasklist)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(tasklist:*)",
+      "Bash(netstat:*)"
     ],
     "deny": [],
     "ask": []

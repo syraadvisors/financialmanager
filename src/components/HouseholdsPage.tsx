@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Plus,
   Edit2,
@@ -14,109 +14,39 @@ import {
 import { Household, HouseholdStatus, BillingAggregationLevel, HouseholdFormData } from '../types/Household';
 import HouseholdFormModal from './HouseholdFormModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
+import { useFirm } from '../contexts/FirmContext';
+import { householdsService } from '../services/api/households.service';
 
 const HouseholdsPage: React.FC = () => {
+  const { firmId } = useFirm();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<HouseholdStatus | 'ALL'>('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingHousehold, setEditingHousehold] = useState<Household | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingHousehold, setDeletingHousehold] = useState<Household | null>(null);
+  const [households, setHouseholds] = useState<Household[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data for demonstration
-  const mockHouseholds: Household[] = [
-    {
-      id: 'HH-001',
-      createdAt: new Date('2020-03-15'),
-      updatedAt: new Date('2024-10-04'),
-      householdName: 'Smith Family',
-      householdStatus: HouseholdStatus.ACTIVE,
-      memberAccountIds: ['1', '2', '3'],
-      memberAccountNames: ['John Smith Individual', 'John Smith IRA', 'Smith Family Trust'],
-      primaryClientId: '1',
-      primaryClientName: 'John Smith',
-      associatedClientIds: ['1', '2'],
-      associatedClientNames: ['John Smith', 'Smith Family Trust'],
-      billingAggregationLevel: BillingAggregationLevel.HOUSEHOLD,
-      feeScheduleId: 'FS-001',
-      feeScheduleName: 'Standard Tiered',
-      establishedDate: new Date('2020-03-15'),
-      numberOfAccounts: 3,
-      totalAUM: 7800000,
-      totalAnnualFees: 72540,
-      numberOfClients: 2,
-      notes: 'Multi-generational family with trust and individual accounts'
-    },
-    {
-      id: 'HH-002',
-      createdAt: new Date('2024-02-01'),
-      updatedAt: new Date('2024-10-04'),
-      householdName: 'Tech Startup LLC',
-      householdStatus: HouseholdStatus.ACTIVE,
-      memberAccountIds: ['4', '5'],
-      memberAccountNames: ['Tech Startup LLC Operating', 'Tech Startup LLC Investment'],
-      primaryClientId: '3',
-      primaryClientName: 'Tech Startup LLC',
-      associatedClientIds: ['3'],
-      associatedClientNames: ['Tech Startup LLC'],
-      billingAggregationLevel: BillingAggregationLevel.ACCOUNT,
-      feeScheduleId: 'FS-003',
-      feeScheduleName: 'Corporate Standard',
-      establishedDate: new Date('2024-02-01'),
-      numberOfAccounts: 2,
-      totalAUM: 1650000,
-      totalAnnualFees: 19800,
-      numberOfClients: 1,
-      notes: 'Corporate client - bill accounts separately'
-    },
-    {
-      id: 'HH-003',
-      createdAt: new Date('2021-06-15'),
-      updatedAt: new Date('2024-09-20'),
-      householdName: 'Johnson Family',
-      householdStatus: HouseholdStatus.ACTIVE,
-      memberAccountIds: ['6', '7'],
-      memberAccountNames: ['Robert Johnson Individual', 'Mary Johnson IRA'],
-      primaryClientId: '4',
-      primaryClientName: 'Robert Johnson',
-      associatedClientIds: ['4', '5'],
-      associatedClientNames: ['Robert Johnson', 'Mary Johnson'],
-      billingAggregationLevel: BillingAggregationLevel.HOUSEHOLD,
-      relationshipId: 'REL-001',
-      relationshipName: 'Johnson Extended Family',
-      feeScheduleId: 'FS-001',
-      feeScheduleName: 'Standard Tiered',
-      establishedDate: new Date('2021-06-15'),
-      numberOfAccounts: 2,
-      totalAUM: 3500000,
-      totalAnnualFees: 32500,
-      numberOfClients: 2
-    },
-    {
-      id: 'HH-004',
-      createdAt: new Date('2019-11-20'),
-      updatedAt: new Date('2024-05-15'),
-      householdName: 'Williams Retirement',
-      householdStatus: HouseholdStatus.INACTIVE,
-      memberAccountIds: [],
-      memberAccountNames: [],
-      primaryClientId: '6',
-      primaryClientName: 'David Williams',
-      associatedClientIds: [],
-      associatedClientNames: [],
-      billingAggregationLevel: BillingAggregationLevel.ACCOUNT,
-      feeScheduleId: 'FS-002',
-      feeScheduleName: 'Premium Flat',
-      establishedDate: new Date('2019-11-20'),
-      numberOfAccounts: 0,
-      totalAUM: 0,
-      totalAnnualFees: 0,
-      numberOfClients: 0,
-      notes: 'Accounts fully distributed, household closed'
-    }
-  ];
+  // Fetch households from Supabase
+  useEffect(() => {
+    const fetchHouseholds = async () => {
+      if (!firmId) return;
 
-  const [households, setHouseholds] = useState<Household[]>(mockHouseholds);
+      setLoading(true);
+      const response = await householdsService.getAll(firmId);
+
+      if (response.data) {
+        setHouseholds(response.data);
+      } else if (response.error) {
+        console.error('Failed to fetch households:', response.error);
+      }
+
+      setLoading(false);
+    };
+
+    fetchHouseholds();
+  }, [firmId]);
 
   const handleAddHousehold = () => {
     setEditingHousehold(null);
@@ -136,52 +66,50 @@ const HouseholdsPage: React.FC = () => {
     setIsDeleteModalOpen(true);
   };
 
-  const confirmDeleteHousehold = () => {
+  const confirmDeleteHousehold = async () => {
     if (!deletingHousehold) return;
 
-    // In production, this would:
-    // 1. Update all accounts to remove their householdId (unassign from household)
-    // 2. If household was part of a relationship, unassign it from the relationship
-    // 3. Delete the household record
-    // 4. Accounts remain active and available for reassignment to other households
+    const response = await householdsService.delete(deletingHousehold.id);
+
+    if (response.error) {
+      console.error('Failed to delete household:', response.error);
+      alert('Failed to delete household');
+      return;
+    }
 
     setHouseholds(prev => prev.filter(h => h.id !== deletingHousehold.id));
-
-    // TODO: In production API calls:
-    // await updateAccountsHousehold(household.memberAccountIds, null);
-    // if (household.relationshipId) {
-    //   await removeHouseholdFromRelationship(household.relationshipId, householdId);
-    // }
-    // await deleteHousehold(householdId);
-
+    setIsDeleteModalOpen(false);
     setDeletingHousehold(null);
   };
 
-  const handleSaveHousehold = (householdData: HouseholdFormData) => {
+  const handleSaveHousehold = async (householdData: HouseholdFormData) => {
+    if (!firmId) return;
+
     if (householdData.id) {
-      // Edit existing household
-      setHouseholds(prev => prev.map(h =>
-        h.id === householdData.id
-          ? { ...h, ...householdData, updatedAt: new Date() }
-          : h
-      ));
+      // Update existing household
+      const response = await householdsService.update(householdData.id, householdData);
+      if (response.data) {
+        setHouseholds(prev => prev.map(h =>
+          h.id === householdData.id ? response.data! : h
+        ));
+      } else if (response.error) {
+        console.error('Failed to update household:', response.error);
+        alert('Failed to update household');
+        return;
+      }
     } else {
-      // Add new household
-      const newHousehold: Household = {
+      // Create new household
+      const response = await householdsService.create({
         ...householdData,
-        id: `HH-${String(households.length + 1).padStart(3, '0')}`,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        householdName: householdData.householdName,
-        householdStatus: householdData.householdStatus,
-        memberAccountIds: householdData.memberAccountIds,
-        billingAggregationLevel: householdData.billingAggregationLevel,
-        numberOfAccounts: householdData.memberAccountIds.length,
-        totalAUM: 0,
-        totalAnnualFees: 0,
-        numberOfClients: 0
-      };
-      setHouseholds(prev => [...prev, newHousehold]);
+        firmId,
+      });
+      if (response.data) {
+        setHouseholds(prev => [...prev, response.data!]);
+      } else if (response.error) {
+        console.error('Failed to create household:', response.error);
+        alert('Failed to create household');
+        return;
+      }
     }
     setIsModalOpen(false);
     setEditingHousehold(null);
@@ -536,7 +464,17 @@ const HouseholdsPage: React.FC = () => {
           </table>
         </div>
 
-        {filteredHouseholds.length === 0 && (
+        {loading && (
+          <div style={{
+            padding: '60px 20px',
+            textAlign: 'center',
+            color: '#999'
+          }}>
+            <p style={{ fontSize: '16px' }}>Loading households...</p>
+          </div>
+        )}
+
+        {!loading && filteredHouseholds.length === 0 && (
           <div style={{
             padding: '60px 20px',
             textAlign: 'center',

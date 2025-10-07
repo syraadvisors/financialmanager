@@ -22,6 +22,7 @@ const RelationshipFormModal: React.FC<RelationshipFormModalProps> = ({
   const mockHouseholds: Household[] = [
     {
       id: 'HH-001',
+      firmId: 'mock-firm-id',
       createdAt: new Date('2020-03-15'),
       updatedAt: new Date('2024-10-04'),
       householdName: 'Smith Family',
@@ -34,6 +35,7 @@ const RelationshipFormModal: React.FC<RelationshipFormModalProps> = ({
     },
     {
       id: 'HH-002',
+      firmId: 'mock-firm-id',
       createdAt: new Date('2024-02-01'),
       updatedAt: new Date('2024-10-04'),
       householdName: 'Tech Startup LLC',
@@ -46,6 +48,7 @@ const RelationshipFormModal: React.FC<RelationshipFormModalProps> = ({
     },
     {
       id: 'HH-003',
+      firmId: 'mock-firm-id',
       createdAt: new Date('2021-06-15'),
       updatedAt: new Date('2024-09-20'),
       householdName: 'Johnson Family',
@@ -59,6 +62,7 @@ const RelationshipFormModal: React.FC<RelationshipFormModalProps> = ({
     },
     {
       id: 'HH-004',
+      firmId: 'mock-firm-id',
       createdAt: new Date('2019-11-20'),
       updatedAt: new Date('2024-05-15'),
       householdName: 'Williams Retirement',

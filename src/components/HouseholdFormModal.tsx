@@ -22,6 +22,7 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
   const mockAccounts: Account[] = [
     {
       id: '1',
+      firmId: 'mock-firm-id',
       createdAt: new Date('2023-01-15'),
       updatedAt: new Date('2024-10-04'),
       accountNumber: 'ACC-12345',
@@ -38,6 +39,7 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
     },
     {
       id: '2',
+      firmId: 'mock-firm-id',
       createdAt: new Date('2023-01-15'),
       updatedAt: new Date('2024-10-04'),
       accountNumber: 'ACC-12346',
@@ -54,6 +56,7 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
     },
     {
       id: '3',
+      firmId: 'mock-firm-id',
       createdAt: new Date('2023-06-10'),
       updatedAt: new Date('2024-10-04'),
       accountNumber: 'ACC-11111',
@@ -70,6 +73,7 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
     },
     {
       id: '4',
+      firmId: 'mock-firm-id',
       createdAt: new Date('2024-02-01'),
       updatedAt: new Date('2024-10-04'),
       accountNumber: 'ACC-22222',
@@ -86,6 +90,7 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
     },
     {
       id: '5',
+      firmId: 'mock-firm-id',
       createdAt: new Date('2024-02-01'),
       updatedAt: new Date('2024-10-04'),
       accountNumber: 'ACC-22223',
@@ -102,6 +107,7 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
     },
     {
       id: '6',
+      firmId: 'mock-firm-id',
       createdAt: new Date('2021-06-15'),
       updatedAt: new Date('2024-10-04'),
       accountNumber: 'ACC-33333',
@@ -118,6 +124,7 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
     },
     {
       id: '7',
+      firmId: 'mock-firm-id',
       createdAt: new Date('2021-06-15'),
       updatedAt: new Date('2024-10-04'),
       accountNumber: 'ACC-33334',
@@ -134,6 +141,7 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
     },
     {
       id: '8',
+      firmId: 'mock-firm-id',
       createdAt: new Date('2024-09-01'),
       updatedAt: new Date('2024-10-04'),
       accountNumber: 'ACC-44444',
@@ -149,6 +157,7 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
     },
     {
       id: '9',
+      firmId: 'mock-firm-id',
       createdAt: new Date('2024-09-01'),
       updatedAt: new Date('2024-10-04'),
       accountNumber: 'ACC-44445',

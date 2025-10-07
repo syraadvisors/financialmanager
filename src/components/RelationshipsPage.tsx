@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Plus,
   Edit2,
@@ -14,80 +14,39 @@ import {
 import { Relationship, RelationshipStatus, RelationshipFormData } from '../types/Relationship';
 import RelationshipFormModal from './RelationshipFormModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
+import { useFirm } from '../contexts/FirmContext';
+import { relationshipsService } from '../services/api/relationships.service';
 
 const RelationshipsPage: React.FC = () => {
+  const { firmId } = useFirm();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<RelationshipStatus | 'ALL'>('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRelationship, setEditingRelationship] = useState<Relationship | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingRelationship, setDeletingRelationship] = useState<Relationship | null>(null);
+  const [relationships, setRelationships] = useState<Relationship[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data for demonstration
-  const mockRelationships: Relationship[] = [
-    {
-      id: 'REL-001',
-      createdAt: new Date('2021-06-15'),
-      updatedAt: new Date('2024-10-04'),
-      relationshipName: 'Johnson Extended Family',
-      relationshipStatus: RelationshipStatus.ACTIVE,
-      memberHouseholdIds: ['HH-003'],
-      memberHouseholdNames: ['Johnson Family'],
-      primaryContactClientId: '4',
-      primaryContactClientName: 'Robert Johnson',
-      feeScheduleId: 'FS-001',
-      feeScheduleName: 'Standard Tiered',
-      establishedDate: new Date('2021-06-15'),
-      numberOfHouseholds: 1,
-      numberOfAccounts: 2,
-      totalAUM: 3500000,
-      totalAnnualFees: 32500,
-      numberOfClients: 2,
-      notes: 'Multi-generational family relationship'
-    },
-    {
-      id: 'REL-002',
-      createdAt: new Date('2020-03-15'),
-      updatedAt: new Date('2024-10-04'),
-      relationshipName: 'Smith Multi-Gen Trust',
-      relationshipStatus: RelationshipStatus.ACTIVE,
-      memberHouseholdIds: [],
-      memberHouseholdNames: [],
-      primaryContactClientId: '1',
-      primaryContactClientName: 'John Smith',
-      feeScheduleId: 'FS-001',
-      feeScheduleName: 'Standard Tiered',
-      establishedDate: new Date('2020-03-15'),
-      numberOfHouseholds: 0,
-      numberOfAccounts: 0,
-      totalAUM: 0,
-      totalAnnualFees: 0,
-      numberOfClients: 0,
-      notes: 'Prepared for future multi-household structure'
-    },
-    {
-      id: 'REL-003',
-      createdAt: new Date('2022-08-20'),
-      updatedAt: new Date('2024-03-15'),
-      relationshipName: 'Williams Business Group',
-      relationshipStatus: RelationshipStatus.INACTIVE,
-      memberHouseholdIds: [],
-      memberHouseholdNames: [],
-      primaryContactClientId: '6',
-      primaryContactClientName: 'David Williams',
-      feeScheduleId: 'FS-003',
-      feeScheduleName: 'Corporate Standard',
-      establishedDate: new Date('2022-08-20'),
-      numberOfHouseholds: 0,
-      numberOfAccounts: 0,
-      totalAUM: 0,
-      totalAnnualFees: 0,
-      numberOfClients: 0,
-      notes: 'Business dissolved, relationship closed'
-    }
-  ];
+  // Fetch relationships from Supabase
+  useEffect(() => {
+    const fetchRelationships = async () => {
+      if (!firmId) return;
 
-  const [relationships, setRelationships] = useState<Relationship[]>(mockRelationships);
+      setLoading(true);
+      const response = await relationshipsService.getAll(firmId);
+
+      if (response.data) {
+        setRelationships(response.data);
+      } else if (response.error) {
+        console.error('Failed to fetch relationships:', response.error);
+      }
+
+      setLoading(false);
+    };
+
+    fetchRelationships();
+  }, [firmId]);
 
   const handleAddRelationship = () => {
     setEditingRelationship(null);
@@ -107,48 +66,50 @@ const RelationshipsPage: React.FC = () => {
     setIsDeleteModalOpen(true);
   };
 
-  const confirmDeleteRelationship = () => {
+  const confirmDeleteRelationship = async () => {
     if (!deletingRelationship) return;
 
-    // In production, this would:
-    // 1. Update all households to remove their relationshipId (unassign from relationship)
-    // 2. Delete the relationship record
-    // 3. Households remain active and available for reassignment to other relationships
+    const response = await relationshipsService.delete(deletingRelationship.id);
+
+    if (response.error) {
+      console.error('Failed to delete relationship:', response.error);
+      alert('Failed to delete relationship');
+      return;
+    }
 
     setRelationships(prev => prev.filter(r => r.id !== deletingRelationship.id));
-
-    // TODO: In production API calls:
-    // await updateHouseholdsRelationship(relationship.memberHouseholdIds, null);
-    // await deleteRelationship(relationshipId);
-
+    setIsDeleteModalOpen(false);
     setDeletingRelationship(null);
   };
 
-  const handleSaveRelationship = (relationshipData: RelationshipFormData) => {
+  const handleSaveRelationship = async (relationshipData: RelationshipFormData) => {
+    if (!firmId) return;
+
     if (relationshipData.id) {
-      // Edit existing relationship
-      setRelationships(prev => prev.map(r =>
-        r.id === relationshipData.id
-          ? { ...r, ...relationshipData, updatedAt: new Date() }
-          : r
-      ));
+      // Update existing relationship
+      const response = await relationshipsService.update(relationshipData.id, relationshipData);
+      if (response.data) {
+        setRelationships(prev => prev.map(r =>
+          r.id === relationshipData.id ? response.data! : r
+        ));
+      } else if (response.error) {
+        console.error('Failed to update relationship:', response.error);
+        alert('Failed to update relationship');
+        return;
+      }
     } else {
-      // Add new relationship
-      const newRelationship: Relationship = {
+      // Create new relationship
+      const response = await relationshipsService.create({
         ...relationshipData,
-        id: `REL-${String(relationships.length + 1).padStart(3, '0')}`,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        relationshipName: relationshipData.relationshipName,
-        relationshipStatus: relationshipData.relationshipStatus,
-        memberHouseholdIds: relationshipData.memberHouseholdIds,
-        numberOfHouseholds: relationshipData.memberHouseholdIds.length,
-        numberOfAccounts: 0,
-        totalAUM: 0,
-        totalAnnualFees: 0,
-        numberOfClients: 0
-      };
-      setRelationships(prev => [...prev, newRelationship]);
+        firmId,
+      });
+      if (response.data) {
+        setRelationships(prev => [...prev, response.data!]);
+      } else if (response.error) {
+        console.error('Failed to create relationship:', response.error);
+        alert('Failed to create relationship');
+        return;
+      }
     }
     setIsModalOpen(false);
     setEditingRelationship(null);
@@ -471,7 +432,17 @@ const RelationshipsPage: React.FC = () => {
           </table>
         </div>
 
-        {filteredRelationships.length === 0 && (
+        {loading && (
+          <div style={{
+            padding: '60px 20px',
+            textAlign: 'center',
+            color: '#999'
+          }}>
+            <p style={{ fontSize: '16px' }}>Loading relationships...</p>
+          </div>
+        )}
+
+        {!loading && filteredRelationships.length === 0 && (
           <div style={{
             padding: '60px 20px',
             textAlign: 'center',

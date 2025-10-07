@@ -14,6 +14,7 @@ export enum BillingAggregationLevel {
 export interface Household {
   // System Fields
   id: string;
+  firmId: string;
   createdAt: Date;
   updatedAt: Date;
 
@@ -65,6 +66,7 @@ export interface Household {
   numberOfClients?: number;
 }
 
-export interface HouseholdFormData extends Omit<Household, 'id' | 'createdAt' | 'updatedAt'> {
+export interface HouseholdFormData extends Omit<Household, 'id' | 'firmId' | 'createdAt' | 'updatedAt'> {
   id?: string;
+  firmId?: string;
 }

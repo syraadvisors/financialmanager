@@ -31,6 +31,7 @@ export enum ReconciliationStatus {
 export interface Account {
   // System Fields
   id: string;
+  firmId: string;
   createdAt: Date;
   updatedAt: Date;
 
@@ -77,8 +78,9 @@ export interface Account {
   billingOverride?: string;
 }
 
-export interface AccountFormData extends Omit<Account, 'id' | 'createdAt' | 'updatedAt'> {
+export interface AccountFormData extends Omit<Account, 'id' | 'firmId' | 'createdAt' | 'updatedAt'> {
   id?: string;
+  firmId?: string;
 }
 
 export interface AccountMismatch {

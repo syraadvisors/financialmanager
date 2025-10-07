@@ -50,6 +50,7 @@ const EnhancedClientDetailModal: React.FC<EnhancedClientDetailModalProps> = ({
     client,
     {
       id: 'hh-1',
+      firmId: 'mock-firm-id',
       householdName: 'Smith Household',
       householdStatus: HouseholdStatus.ACTIVE,
       billingAggregationLevel: 'household' as any,

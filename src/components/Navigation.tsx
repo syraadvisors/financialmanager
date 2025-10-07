@@ -17,11 +17,13 @@ import {
   Building2,
   UserCircle,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  LogOut
 } from 'lucide-react';
 import { PageType, NavigationItem, AppState } from '../types/NavigationTypes';
 import { APP_CONFIG } from '../config/constants';
 import UndoRedoControls from './UndoRedoControls';
+import { useAuth } from '../contexts/AuthContext';
 
 interface NavigationProps {
   currentPage: PageType;
@@ -33,6 +35,8 @@ interface NavigationProps {
 
 const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appState, isCollapsed: externalCollapsed, onToggleCollapse }) => {
   const [internalCollapsed, setInternalCollapsed] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const { user, signOut } = useAuth();
   const isCollapsed = externalCollapsed !== undefined ? externalCollapsed : internalCollapsed;
 
   const handleToggle = () => {
@@ -414,6 +418,119 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
       {!isCollapsed && (
         <div style={{ padding: '10px 20px' }}>
           <UndoRedoControls />
+        </div>
+      )}
+
+      {/* User Profile Section */}
+      {user && (
+        <div style={{
+          padding: isCollapsed ? '10px 12px' : '10px 20px',
+          borderTop: '1px solid #f0f0f0',
+          marginTop: 'auto',
+          position: 'relative'
+        }}>
+          <button
+            onClick={() => setShowUserMenu(!showUserMenu)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '10px',
+              backgroundColor: 'transparent',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              transition: 'background-color 0.2s',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            title={isCollapsed ? user.email || 'User menu' : undefined}
+          >
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              backgroundColor: '#667eea',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              fontSize: '16px',
+              fontWeight: 'bold',
+              flexShrink: 0
+            }}>
+              {user.email?.charAt(0).toUpperCase() || 'U'}
+            </div>
+            {!isCollapsed && (
+              <div style={{ flex: 1, textAlign: 'left', overflow: 'hidden' }}>
+                <div style={{ fontSize: '14px', fontWeight: '600', color: '#333', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {user.user_metadata?.full_name || user.email?.split('@')[0]}
+                </div>
+                <div style={{ fontSize: '12px', color: '#999', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {user.email}
+                </div>
+              </div>
+            )}
+          </button>
+
+          {/* User Menu Dropdown */}
+          {showUserMenu && !isCollapsed && (
+            <>
+              <div
+                style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  zIndex: 98
+                }}
+                onClick={() => setShowUserMenu(false)}
+              />
+              <div style={{
+                position: 'absolute',
+                bottom: '70px',
+                left: '20px',
+                right: '20px',
+                backgroundColor: 'white',
+                borderRadius: '8px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                border: '1px solid #e0e0e0',
+                zIndex: 99
+              }}>
+                <button
+                  onClick={async () => {
+                    try {
+                      await signOut();
+                      setShowUserMenu(false);
+                    } catch (error) {
+                      console.error('Sign out error:', error);
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '12px 16px',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    color: '#dc3545',
+                    fontWeight: '500',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fff5f5'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <LogOut size={18} />
+                  Sign Out
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 

@@ -8,6 +8,7 @@ export enum RelationshipStatus {
 export interface Relationship {
   // System Fields
   id: string;
+  firmId: string;
   createdAt: Date;
   updatedAt: Date;
 
@@ -41,6 +42,7 @@ export interface Relationship {
   numberOfClients?: number;
 }
 
-export interface RelationshipFormData extends Omit<Relationship, 'id' | 'createdAt' | 'updatedAt'> {
+export interface RelationshipFormData extends Omit<Relationship, 'id' | 'firmId' | 'createdAt' | 'updatedAt'> {
   id?: string;
+  firmId?: string;
 }

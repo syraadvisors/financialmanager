@@ -96,17 +96,34 @@ export const FirmProvider: React.FC<FirmProviderProps> = ({
     }
   }, [defaultFirmId]);
 
-  // In the future, this will check the authenticated user's JWT for firm_id
-  // For now, we're using defaultFirmId for development
+  // Check authenticated user and load firm by email domain
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { user } } = await supabase.auth.getUser();
 
-      if (user?.app_metadata?.firm_id) {
-        // User is authenticated and has a firm_id
-        const authFirmId = user.app_metadata.firm_id;
-        setFirmIdState(authFirmId);
-        loadFirm(authFirmId);
+      if (user) {
+        // First check if firm_id is in app_metadata
+        if (user.app_metadata?.firm_id) {
+          const authFirmId = user.app_metadata.firm_id;
+          setFirmIdState(authFirmId);
+          loadFirm(authFirmId);
+        } else if (user.email) {
+          // Look up firm by email domain
+          const domain = user.email.split('@')[1];
+          const { data: firmData, error: firmError } = await supabase
+            .from('firms')
+            .select('id')
+            .eq('firm_domain', domain)
+            .single();
+
+          if (!firmError && firmData) {
+            setFirmIdState(firmData.id);
+            loadFirm(firmData.id);
+          } else if (!defaultFirmId) {
+            console.error('No firm found for domain:', domain);
+            setLoading(false);
+          }
+        }
       } else if (!defaultFirmId) {
         // No authenticated user and no default firm
         setLoading(false);
@@ -116,11 +133,28 @@ export const FirmProvider: React.FC<FirmProviderProps> = ({
     checkAuth();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session?.user?.app_metadata?.firm_id) {
-        const authFirmId = session.user.app_metadata.firm_id;
-        setFirmIdState(authFirmId);
-        loadFirm(authFirmId);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        const user = session.user;
+
+        if (user.app_metadata?.firm_id) {
+          const authFirmId = user.app_metadata.firm_id;
+          setFirmIdState(authFirmId);
+          loadFirm(authFirmId);
+        } else if (user.email) {
+          // Look up firm by email domain
+          const domain = user.email.split('@')[1];
+          const { data: firmData, error: firmError } = await supabase
+            .from('firms')
+            .select('id')
+            .eq('firm_domain', domain)
+            .single();
+
+          if (!firmError && firmData) {
+            setFirmIdState(firmData.id);
+            loadFirm(firmData.id);
+          }
+        }
       } else if (event === 'SIGNED_OUT') {
         setFirmIdState(defaultFirmId || null);
         setFirm(null);

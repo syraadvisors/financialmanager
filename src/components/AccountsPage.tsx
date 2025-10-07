@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Plus,
   Edit2,
@@ -13,8 +13,11 @@ import {
 } from 'lucide-react';
 import { Account, AccountStatus, ReconciliationStatus, AccountMismatch, AccountFormData } from '../types/Account';
 import AccountFormModal from './AccountFormModal';
+import { useFirm } from '../contexts/FirmContext';
+import { accountsService } from '../services/api/accounts.service';
 
 const AccountsPage: React.FC = () => {
+  const { firmId } = useFirm();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<AccountStatus | 'ALL'>('ALL');
   const [reconciliationFilter, setReconciliationFilter] = useState<ReconciliationStatus | 'ALL'>('ALL');
@@ -25,96 +28,28 @@ const AccountsPage: React.FC = () => {
   const [isAccountFormModalOpen, setIsAccountFormModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data - in production, this would come from API/state management
-  const mockAccounts: Account[] = [
-    {
-      id: '1',
-      createdAt: new Date('2023-01-15'),
-      updatedAt: new Date('2024-10-04'),
-      accountNumber: 'ACC-12345',
-      accountName: 'John Smith Individual',
-      accountType: 'Individual' as any,
-      accountStatus: AccountStatus.ACTIVE,
-      clientId: '1',
-      clientName: 'John Smith',
-      householdId: 'HH-001',
-      householdName: 'Smith Family',
-      custodianAccountId: 'CUST-12345',
-      registrationName: 'John Smith',
-      openDate: new Date('2020-03-15'),
-      currentBalance: 1250000,
-      lastImportDate: new Date('2024-10-04'),
-      reconciliationStatus: ReconciliationStatus.MATCHED,
-      lastReconciledDate: new Date('2024-10-04'),
-      isExcludedFromBilling: false,
-      feeScheduleId: 'FS-001',
-      feeScheduleName: 'Standard Tiered'
-    },
-    {
-      id: '2',
-      createdAt: new Date('2024-10-04'),
-      updatedAt: new Date('2024-10-04'),
-      accountNumber: 'ACC-67890',
-      accountName: 'Jane Doe IRA',
-      accountType: 'IRA Roth' as any,
-      accountStatus: AccountStatus.ACTIVE,
-      custodianAccountId: 'CUST-67890',
-      registrationName: 'Jane Doe IRA',
-      openDate: new Date('2024-09-28'),
-      currentBalance: 450000,
-      lastImportDate: new Date('2024-10-04'),
-      reconciliationStatus: ReconciliationStatus.NEW_ACCOUNT,
-      reconciliationNotes: 'New account from recent custodian import - needs client assignment',
-      isExcludedFromBilling: false,
-    },
-    {
-      id: '3',
-      createdAt: new Date('2023-06-10'),
-      updatedAt: new Date('2024-09-28'),
-      accountNumber: 'ACC-11111',
-      accountName: 'Smith Family Trust',
-      accountType: 'Trust' as any,
-      accountStatus: AccountStatus.INACTIVE,
-      clientId: '2',
-      clientName: 'Smith Family Trust',
-      householdId: 'HH-001',
-      householdName: 'Smith Family',
-      registrationName: 'Smith Family Revocable Trust',
-      openDate: new Date('2021-06-10'),
-      closeDate: new Date('2024-09-28'),
-      currentBalance: 0,
-      lastImportDate: new Date('2024-09-20'),
-      reconciliationStatus: ReconciliationStatus.DELINKED,
-      reconciliationNotes: 'Account not in recent custodian data - may be closed',
-      isExcludedFromBilling: false,
-      feeScheduleId: 'FS-002',
-      feeScheduleName: 'Premium Flat'
-    },
-    {
-      id: '4',
-      createdAt: new Date('2023-03-20'),
-      updatedAt: new Date('2024-10-04'),
-      accountNumber: 'ACC-22222',
-      accountName: 'Tech Startup LLC Operating',
-      accountType: 'LLC' as any,
-      accountStatus: AccountStatus.ACTIVE,
-      clientId: '3',
-      clientName: 'Tech Startup LLC',
-      custodianAccountId: 'CUST-22222',
-      registrationName: 'Tech Startup LLC',
-      openDate: new Date('2024-02-01'),
-      currentBalance: 1200000,
-      lastImportDate: new Date('2024-10-04'),
-      reconciliationStatus: ReconciliationStatus.MATCHED,
-      lastReconciledDate: new Date('2024-10-04'),
-      isExcludedFromBilling: false,
-      feeScheduleId: 'FS-003',
-      feeScheduleName: 'Corporate Standard'
-    },
-  ];
+  // Fetch accounts from Supabase
+  useEffect(() => {
+    const fetchAccounts = async () => {
+      if (!firmId) return;
 
-  const [accounts, setAccounts] = useState<Account[]>(mockAccounts);
+      setLoading(true);
+      const response = await accountsService.getAll(firmId);
+
+      if (response.data) {
+        setAccounts(response.data);
+      } else if (response.error) {
+        console.error('Failed to fetch accounts:', response.error);
+      }
+
+      setLoading(false);
+    };
+
+    fetchAccounts();
+  }, [firmId]);
 
   // Mock clients for assignment dropdown
   const mockClients = [
@@ -155,23 +90,34 @@ const AccountsPage: React.FC = () => {
     setIsAccountFormModalOpen(true);
   };
 
-  const handleSaveAccount = (accountData: AccountFormData) => {
+  const handleSaveAccount = async (accountData: AccountFormData) => {
+    if (!firmId) return;
+
     if (accountData.id) {
       // Update existing account
-      setAccounts(prev => prev.map(acc =>
-        acc.id === accountData.id
-          ? { ...acc, ...accountData, updatedAt: new Date() }
-          : acc
-      ));
+      const response = await accountsService.update(accountData.id, accountData);
+      if (response.data) {
+        setAccounts(prev => prev.map(acc =>
+          acc.id === accountData.id ? response.data! : acc
+        ));
+      } else if (response.error) {
+        console.error('Failed to update account:', response.error);
+        alert('Failed to update account');
+        return;
+      }
     } else {
       // Create new account
-      const newAccount: Account = {
+      const response = await accountsService.create({
         ...accountData,
-        id: (accounts.length + 1).toString(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as Account;
-      setAccounts(prev => [...prev, newAccount]);
+        firmId,
+      });
+      if (response.data) {
+        setAccounts(prev => [...prev, response.data!]);
+      } else if (response.error) {
+        console.error('Failed to create account:', response.error);
+        alert('Failed to create account');
+        return;
+      }
     }
     setIsAccountFormModalOpen(false);
     setEditingAccount(null);
@@ -187,57 +133,66 @@ const AccountsPage: React.FC = () => {
     setIsOffboardModalOpen(true);
   };
 
-  const handleAssignAccount = (clientId: string) => {
+  const handleAssignAccount = async (clientId: string) => {
     if (!selectedAccount) return;
 
     const selectedClient = mockClients.find(c => c.id === clientId);
     if (!selectedClient) return;
 
-    setAccounts(prev => prev.map(account =>
-      account.id === selectedAccount.id
-        ? {
-            ...account,
-            clientId,
-            clientName: selectedClient.name,
-            reconciliationStatus: ReconciliationStatus.MATCHED,
-            lastReconciledDate: new Date(),
-            reconciliationNotes: `Assigned to ${selectedClient.name} on ${new Date().toLocaleDateString()}`
-          }
-        : account
-    ));
+    const response = await accountsService.update(selectedAccount.id, {
+      clientId,
+      clientName: selectedClient.name,
+      reconciliationStatus: ReconciliationStatus.MATCHED,
+      lastReconciledDate: new Date(),
+      reconciliationNotes: `Assigned to ${selectedClient.name} on ${new Date().toLocaleDateString()}`
+    });
+
+    if (response.data) {
+      setAccounts(prev => prev.map(account =>
+        account.id === selectedAccount.id ? response.data! : account
+      ));
+    } else if (response.error) {
+      console.error('Failed to assign account:', response.error);
+      alert('Failed to assign account');
+      return;
+    }
 
     setIsAssignModalOpen(false);
     setSelectedAccount(null);
   };
 
-  const handleOffboardAccount = () => {
+  const handleOffboardAccount = async () => {
     if (!selectedAccount) return;
 
-    setAccounts(prev => prev.map(account =>
-      account.id === selectedAccount.id
-        ? {
-            ...account,
-            accountStatus: AccountStatus.INACTIVE,
-            reconciliationStatus: ReconciliationStatus.MATCHED,
-            closeDate: new Date(),
-            reconciliationNotes: `Marked inactive on ${new Date().toLocaleDateString()}`
-          }
-        : account
-    ));
+    const response = await accountsService.update(selectedAccount.id, {
+      accountStatus: AccountStatus.INACTIVE,
+      reconciliationStatus: ReconciliationStatus.MATCHED,
+      closeDate: new Date(),
+      reconciliationNotes: `Marked inactive on ${new Date().toLocaleDateString()}`
+    });
+
+    if (response.data) {
+      setAccounts(prev => prev.map(account =>
+        account.id === selectedAccount.id ? response.data! : account
+      ));
+    } else if (response.error) {
+      console.error('Failed to offboard account:', response.error);
+      alert('Failed to offboard account');
+      return;
+    }
 
     setIsOffboardModalOpen(false);
     setSelectedAccount(null);
   };
 
-  const handleLinkAccount = (accountData: { accountNumber: string; clientId: string }) => {
+  const handleLinkAccount = async (accountData: { accountNumber: string; clientId: string }) => {
+    if (!firmId) return;
+
     const selectedClient = mockClients.find(c => c.id === accountData.clientId);
     if (!selectedClient) return;
 
-    // In production, this would create a new account linked to existing custodian data
-    const newAccount: Account = {
-      id: (accounts.length + 1).toString(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    const response = await accountsService.create({
+      firmId,
       accountNumber: accountData.accountNumber,
       accountName: `${selectedClient.name} - Linked Account`,
       accountType: 'Individual' as any,
@@ -252,9 +207,16 @@ const AccountsPage: React.FC = () => {
       reconciliationStatus: ReconciliationStatus.MATCHED,
       lastReconciledDate: new Date(),
       isExcludedFromBilling: false,
-    };
+    });
 
-    setAccounts(prev => [...prev, newAccount]);
+    if (response.data) {
+      setAccounts(prev => [...prev, response.data!]);
+    } else if (response.error) {
+      console.error('Failed to link account:', response.error);
+      alert('Failed to link account');
+      return;
+    }
+
     setIsLinkAccountModalOpen(false);
   };
 
@@ -748,7 +710,17 @@ const AccountsPage: React.FC = () => {
           </table>
         </div>
 
-        {filteredAccounts.length === 0 && (
+        {loading && (
+          <div style={{
+            padding: '60px 20px',
+            textAlign: 'center',
+            color: '#999'
+          }}>
+            <p style={{ fontSize: '16px' }}>Loading accounts...</p>
+          </div>
+        )}
+
+        {!loading && filteredAccounts.length === 0 && (
           <div style={{
             padding: '60px 20px',
             textAlign: 'center',

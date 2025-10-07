@@ -5,11 +5,12 @@ import { mapToCamelCase, mapToSnakeCase } from '../../utils/databaseMapper';
 
 export const accountsService = {
   // Get all accounts
-  async getAll(): Promise<ApiResponse<Account[]>> {
+  async getAll(firmId: string): Promise<ApiResponse<Account[]>> {
     try {
       const { data, error } = await supabase
         .from('accounts')
         .select('*')
+        .eq('firm_id', firmId)
         .order('account_number', { ascending: true });
 
       if (error) {
