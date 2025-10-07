@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Users, Home, Building2, DollarSign, AlertCircle } from 'lucide-react';
+import { X, Users, Home, Building2, AlertCircle } from 'lucide-react';
 import {
   Client,
   ClientFormData,

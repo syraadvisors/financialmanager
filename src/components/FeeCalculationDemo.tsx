@@ -4,7 +4,6 @@ import { FeeCalculationEngine } from '../utils/feeCalculationEngine';
 import { FeeScheduleManager, BillingPeriodManager } from '../utils/feeScheduleManager';
 import { runFeeTests } from '../utils/runFeeCalculationTests';
 import { AccountBalance, AccountPosition } from '../types/DataTypes';
-import { FeeSchedule, BillingPeriod } from '../types/FeeTypes';
 
 const FeeCalculationDemo: React.FC = () => {
   const [testResults, setTestResults] = useState<any>(null);

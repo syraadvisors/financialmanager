@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Calendar,
-  Clock,
   CheckCircle,
   AlertCircle,
   TrendingUp,
-  DollarSign
+  Clock
 } from 'lucide-react';
 
 interface BillingPeriod {
@@ -37,8 +36,6 @@ const BillingPeriodsPage: React.FC = () => {
       if (month >= 6 && month <= 8) return { quarter: 'Q3', startMonth: 6, year };
       return { quarter: 'Q4', startMonth: 9, year };
     };
-
-    const currentQuarter = getQuarterInfo(today);
 
     // Generate last 4 completed quarters
     const completedPeriods = [

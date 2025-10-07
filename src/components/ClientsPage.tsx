@@ -1,86 +1,47 @@
-import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, Search, Filter, UserCircle, Mail, Phone, DollarSign } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Edit2, Trash2, Search, Filter, UserCircle, Mail, Phone } from 'lucide-react';
 import { Client, ClientStatus, EntityType, ClientFormData } from '../types/Client';
 import ClientFormModal from './ClientFormModal';
+import { clientsService } from '../services/api/clients.service';
+import { checkSupabaseConnection } from '../lib/supabase';
+import { useFirm } from '../contexts/FirmContext';
 
 const ClientsPage: React.FC = () => {
+  const { firmId, firm, loading: firmLoading } = useFirm();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<ClientStatus | 'ALL'>('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock data for demonstration
-  const mockClients: Client[] = [
-    {
-      id: '1',
-      createdAt: new Date('2023-01-15'),
-      updatedAt: new Date('2024-10-01'),
-      fullLegalName: 'John Smith',
-      taxIdType: 'SSN' as any,
-      taxIdNumber: '***-**-1234',
-      dateOfBirth: new Date('1965-03-20'),
-      entityType: EntityType.INDIVIDUAL,
-      primaryEmail: 'john.smith@email.com',
-      mobilePhone: '(555) 123-4567',
-      clientStatus: ClientStatus.ACTIVE,
-      billingFrequency: 'Quarterly' as any,
-      billingMethod: 'Debit from Account' as any,
-      primaryAdvisor: 'Jane Advisor',
-      clientSinceDate: new Date('2020-03-15'),
-      doNotContact: false,
-      doNotEmail: false,
-      doNotCall: false,
-      totalAUM: 2500000,
-      numberOfAccounts: 3,
-      totalAnnualFees: 25000,
-    },
-    {
-      id: '2',
-      createdAt: new Date('2023-06-10'),
-      updatedAt: new Date('2024-09-28'),
-      fullLegalName: 'Smith Family Trust',
-      taxIdType: 'EIN' as any,
-      taxIdNumber: '**-***5678',
-      entityType: EntityType.TRUST,
-      primaryEmail: 'trustee@smithfamily.com',
-      mobilePhone: '(555) 234-5678',
-      clientStatus: ClientStatus.ACTIVE,
-      billingFrequency: 'Quarterly' as any,
-      billingMethod: 'Invoice' as any,
-      primaryAdvisor: 'Jane Advisor',
-      clientSinceDate: new Date('2021-06-10'),
-      doNotContact: false,
-      doNotEmail: false,
-      doNotCall: false,
-      totalAUM: 5800000,
-      numberOfAccounts: 5,
-      totalAnnualFees: 52200,
-    },
-    {
-      id: '3',
-      createdAt: new Date('2024-02-01'),
-      updatedAt: new Date('2024-09-15'),
-      fullLegalName: 'Tech Startup LLC',
-      taxIdType: 'EIN' as any,
-      taxIdNumber: '**-***9012',
-      entityType: EntityType.LLC,
-      primaryEmail: 'cfo@techstartup.com',
-      officePhone: '(555) 345-6789',
-      clientStatus: ClientStatus.ACTIVE,
-      billingFrequency: 'Annual' as any,
-      billingMethod: 'Wire Transfer' as any,
-      primaryAdvisor: 'Bob Consultant',
-      clientSinceDate: new Date('2024-02-01'),
-      doNotContact: false,
-      doNotEmail: false,
-      doNotCall: false,
-      totalAUM: 1200000,
-      numberOfAccounts: 2,
-      totalAnnualFees: 14400,
-    },
-  ];
+  // Load clients from Supabase on mount
+  useEffect(() => {
+    loadClients();
+    checkSupabaseConnection();
+  }, []);
 
-  const [clients, setClients] = useState<Client[]>(mockClients);
+  const loadClients = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await clientsService.getAll();
+
+      if (response.error) {
+        setError(response.error);
+        console.error('Error loading clients:', response.error);
+      } else {
+        setClients(response.data || []);
+      }
+    } catch (err) {
+      const errorMsg = 'Failed to load clients';
+      setError(errorMsg);
+      console.error(errorMsg, err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAddClient = () => {
     setEditingClient(null);
@@ -92,42 +53,56 @@ const ClientsPage: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleDeleteClient = (clientId: string) => {
+  const handleDeleteClient = async (clientId: string) => {
     if (window.confirm('Are you sure you want to delete this client? This action cannot be undone.')) {
-      setClients(prev => prev.filter(c => c.id !== clientId));
+      const response = await clientsService.delete(clientId);
+
+      if (response.error) {
+        alert('Failed to delete client: ' + response.error);
+      } else {
+        // Reload clients after successful delete
+        await loadClients();
+      }
     }
   };
 
-  const handleSaveClient = (clientData: ClientFormData) => {
-    if (clientData.id) {
-      // Edit existing client
-      setClients(prev => prev.map(c =>
-        c.id === clientData.id
-          ? { ...c, ...clientData, updatedAt: new Date() }
-          : c
-      ));
-    } else {
-      // Add new client
-      const newClient: Client = {
-        ...clientData,
-        id: Date.now().toString(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        fullLegalName: clientData.fullLegalName,
-        taxIdType: clientData.taxIdType,
-        taxIdNumber: clientData.taxIdNumber,
-        entityType: clientData.entityType,
-        clientStatus: clientData.clientStatus,
-        billingFrequency: clientData.billingFrequency,
-        billingMethod: clientData.billingMethod,
-        doNotContact: clientData.doNotContact,
-        doNotEmail: clientData.doNotEmail,
-        doNotCall: clientData.doNotCall,
-      };
-      setClients(prev => [...prev, newClient]);
+  const handleSaveClient = async (clientData: ClientFormData) => {
+    try {
+      // Ensure firmId is set for multi-tenant data isolation
+      if (!firmId) {
+        alert('Firm ID is not available. Please refresh the page.');
+        return;
+      }
+
+      if (clientData.id) {
+        // Edit existing client
+        const response = await clientsService.update(clientData.id, clientData);
+
+        if (response.error) {
+          alert('Failed to update client: ' + response.error);
+          return;
+        }
+      } else {
+        // Add new client - include firmId for multi-tenant isolation
+        const response = await clientsService.create({
+          ...clientData,
+          firmId, // Link client to current firm
+        });
+
+        if (response.error) {
+          alert('Failed to create client: ' + response.error);
+          return;
+        }
+      }
+
+      // Reload clients after successful save
+      await loadClients();
+      setIsModalOpen(false);
+      setEditingClient(null);
+    } catch (err) {
+      console.error('Error saving client:', err);
+      alert('An unexpected error occurred while saving the client');
     }
-    setIsModalOpen(false);
-    setEditingClient(null);
   };
 
   const handleCloseModal = () => {
@@ -298,15 +273,57 @@ const ClientsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Loading State */}
+      {loading && (
+        <div style={{
+          padding: '40px',
+          textAlign: 'center',
+          backgroundColor: 'white',
+          borderRadius: '8px',
+          border: '1px solid #e0e0e0'
+        }}>
+          <p style={{ color: '#666', fontSize: '16px' }}>Loading clients from Supabase...</p>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <div style={{
+          padding: '20px',
+          backgroundColor: '#fff3cd',
+          border: '1px solid #ffc107',
+          borderRadius: '8px',
+          marginBottom: '20px'
+        }}>
+          <p style={{ color: '#856404', margin: 0 }}>
+            <strong>Error:</strong> {error}
+          </p>
+          <button
+            onClick={loadClients}
+            style={{
+              marginTop: '10px',
+              padding: '8px 16px',
+              backgroundColor: '#ffc107',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Clients Table */}
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: '8px',
-        border: '1px solid #e0e0e0',
-        overflow: 'hidden'
-      }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      {!loading && (
+        <div style={{
+          backgroundColor: 'white',
+          borderRadius: '8px',
+          border: '1px solid #e0e0e0',
+          overflow: 'hidden'
+        }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '2px solid #e0e0e0' }}>
                 <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>CLIENT</th>
@@ -460,7 +477,8 @@ const ClientsPage: React.FC = () => {
             <p style={{ fontSize: '14px' }}>Try adjusting your search or filters</p>
           </div>
         )}
-      </div>
+        </div>
+      )}
 
       {/* Client Form Modal */}
       <ClientFormModal

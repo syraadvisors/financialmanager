@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, DollarSign } from 'lucide-react';
+import { X, Plus, Trash2 } from 'lucide-react';
 import { FeeSchedule, FeeTier, FeeScheduleStatus, FeeStructureType, FeeScheduleTag } from '../types/FeeSchedule';
 
 interface FeeScheduleFormModalProps {

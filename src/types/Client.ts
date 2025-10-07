@@ -69,6 +69,7 @@ export interface Address {
 export interface Client {
   // System Fields
   id: string;
+  firmId: string; // Multi-tenant: links client to their firm
   createdAt: Date;
   updatedAt: Date;
 
@@ -125,6 +126,7 @@ export interface Client {
   lastContactDate?: Date;
 }
 
-export interface ClientFormData extends Omit<Client, 'id' | 'createdAt' | 'updatedAt'> {
+export interface ClientFormData extends Omit<Client, 'id' | 'firmId' | 'createdAt' | 'updatedAt'> {
   id?: string;
+  firmId?: string; // Optional - added by ClientsPage before submission
 }

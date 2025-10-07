@@ -149,7 +149,6 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
   };
 
   const handleMasterAccountSelect = (masterAccountId: string) => {
-    const selectedMasterAccount = availableMasterAccounts.find(ma => ma.id === masterAccountId);
     updateField('masterAccountId', masterAccountId);
   };
 

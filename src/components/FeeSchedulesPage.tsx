@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Plus, Edit2, Eye, Tag, FolderPlus } from 'lucide-react';
+import { Search, Plus, Edit2, Eye } from 'lucide-react';
 import { FeeSchedule, FeeScheduleStatus, FeeScheduleTag } from '../types/FeeSchedule';
 import FeeScheduleFormModal from './FeeScheduleFormModal';
 import { allFeeSchedules } from '../data/feeSchedulesData';

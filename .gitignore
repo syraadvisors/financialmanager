@@ -24,3 +24,5 @@ yarn-error.log*
 
 # Windows null file
 nul
+.env.local
+

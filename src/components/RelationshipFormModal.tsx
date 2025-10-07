@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Building2, Search, AlertCircle, CheckSquare, Square, DollarSign, Home } from 'lucide-react';
 import { Relationship, RelationshipFormData, RelationshipStatus } from '../types/Relationship';
-import { Household } from '../types/Household';
+import { Household, HouseholdStatus } from '../types/Household';
 
 interface RelationshipFormModalProps {
   isOpen: boolean;
@@ -25,7 +25,7 @@ const RelationshipFormModal: React.FC<RelationshipFormModalProps> = ({
       createdAt: new Date('2020-03-15'),
       updatedAt: new Date('2024-10-04'),
       householdName: 'Smith Family',
-      householdStatus: 'Active' as any,
+      householdStatus: HouseholdStatus.ACTIVE,
       memberAccountIds: ['1', '2', '3'],
       billingAggregationLevel: 'Household' as any,
       relationshipId: undefined,
@@ -37,7 +37,7 @@ const RelationshipFormModal: React.FC<RelationshipFormModalProps> = ({
       createdAt: new Date('2024-02-01'),
       updatedAt: new Date('2024-10-04'),
       householdName: 'Tech Startup LLC',
-      householdStatus: 'Active' as any,
+      householdStatus: HouseholdStatus.ACTIVE,
       memberAccountIds: ['4', '5'],
       billingAggregationLevel: 'Account' as any,
       relationshipId: undefined,
@@ -49,7 +49,7 @@ const RelationshipFormModal: React.FC<RelationshipFormModalProps> = ({
       createdAt: new Date('2021-06-15'),
       updatedAt: new Date('2024-09-20'),
       householdName: 'Johnson Family',
-      householdStatus: 'Active' as any,
+      householdStatus: HouseholdStatus.ACTIVE,
       memberAccountIds: ['6', '7'],
       billingAggregationLevel: 'Household' as any,
       relationshipId: 'REL-001',
@@ -62,7 +62,7 @@ const RelationshipFormModal: React.FC<RelationshipFormModalProps> = ({
       createdAt: new Date('2019-11-20'),
       updatedAt: new Date('2024-05-15'),
       householdName: 'Williams Retirement',
-      householdStatus: 'Inactive' as any,
+      householdStatus: HouseholdStatus.INACTIVE,
       memberAccountIds: [],
       billingAggregationLevel: 'Account' as any,
       relationshipId: undefined,

@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import {
   Plus,
   Edit2,
-  Trash2,
   Search,
   Filter,
   AlertTriangle,
@@ -10,7 +9,6 @@ import {
   XCircle,
   Link2,
   Unlink,
-  DollarSign,
   Users
 } from 'lucide-react';
 import { Account, AccountStatus, ReconciliationStatus, AccountMismatch, AccountFormData } from '../types/Account';

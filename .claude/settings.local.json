@@ -2,7 +2,19 @@
   "permissions": {
     "allow": [
       "Bash(npm start)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm test:*)",
+      "Bash(awk:*)",
+      "Bash(npm run analyze:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(if not exist \"src\\utils\" mkdir \"src\\utils\")",
+      "Bash(npm run lint:*)",
+      "Bash(cat:*)",
+      "Bash(npm install:*)",
+      "Bash(taskkill:*)",
+      "Bash(tasklist)",
+      "Bash(findstr:*)"
     ],
     "deny": [],
     "ask": []

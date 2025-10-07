@@ -29,37 +29,37 @@ const AdvancedFilters: React.FC = () => {
   const [saveFilterName, setSaveFilterName] = useState('');
   const [newFilterField, setNewFilterField] = useState('');
 
-  // Define available fields for filtering based on data structure
-  const balanceFields: FieldOption[] = [
-    { key: 'accountNumber', label: 'Account Number', type: 'string' },
-    { key: 'accountName', label: 'Account Name', type: 'string' },
-    { key: 'portfolioValue', label: 'Portfolio Value', type: 'number' },
-    { key: 'totalCash', label: 'Total Cash', type: 'number' },
-    { key: 'totalEquity', label: 'Total Equity', type: 'number' },
-    { key: 'totalFixedIncome', label: 'Fixed Income', type: 'number' },
-    { key: 'totalAlternative', label: 'Alternative Investments', type: 'number' },
-  ];
-
-  const positionFields: FieldOption[] = [
-    { key: 'accountNumber', label: 'Account Number', type: 'string' },
-    { key: 'symbol', label: 'Symbol', type: 'string' },
-    { key: 'securityDescription', label: 'Security Description', type: 'string' },
-    { key: 'securityType', label: 'Security Type', type: 'string' },
-    { key: 'marketValue', label: 'Market Value', type: 'number' },
-    { key: 'numberOfShares', label: 'Number of Shares', type: 'number' },
-    { key: 'price', label: 'Price', type: 'number' },
-    { key: 'unrealizedGainLoss', label: 'Unrealized Gain/Loss', type: 'number' },
-    { key: 'percentOfAccount', label: 'Percent of Account', type: 'number' },
-  ];
-
   // Combine and deduplicate fields
   const allFields = useMemo(() => {
+    // Define available fields for filtering based on data structure
+    const balanceFields: FieldOption[] = [
+      { key: 'accountNumber', label: 'Account Number', type: 'string' },
+      { key: 'accountName', label: 'Account Name', type: 'string' },
+      { key: 'portfolioValue', label: 'Portfolio Value', type: 'number' },
+      { key: 'totalCash', label: 'Total Cash', type: 'number' },
+      { key: 'totalEquity', label: 'Total Equity', type: 'number' },
+      { key: 'totalFixedIncome', label: 'Fixed Income', type: 'number' },
+      { key: 'totalAlternative', label: 'Alternative Investments', type: 'number' },
+    ];
+
+    const positionFields: FieldOption[] = [
+      { key: 'accountNumber', label: 'Account Number', type: 'string' },
+      { key: 'symbol', label: 'Symbol', type: 'string' },
+      { key: 'securityDescription', label: 'Security Description', type: 'string' },
+      { key: 'securityType', label: 'Security Type', type: 'string' },
+      { key: 'marketValue', label: 'Market Value', type: 'number' },
+      { key: 'numberOfShares', label: 'Number of Shares', type: 'number' },
+      { key: 'price', label: 'Price', type: 'number' },
+      { key: 'unrealizedGainLoss', label: 'Unrealized Gain/Loss', type: 'number' },
+      { key: 'percentOfAccount', label: 'Percent of Account', type: 'number' },
+    ];
+
     const combined = [...balanceFields, ...positionFields];
     const unique = combined.filter((field, index, self) =>
       index === self.findIndex(f => f.key === field.key)
     );
     return unique.sort((a, b) => a.label.localeCompare(b.label));
-  }, [balanceFields, positionFields]);
+  }, []);
 
   // Get unique values for string fields (for dropdown suggestions)
   const getFieldOptions = (fieldKey: string): string[] => {

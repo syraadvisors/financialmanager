@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { FileText, Download, Calendar, DollarSign, TrendingUp, Users, PieChart, FileDown, Receipt } from 'lucide-react';
 import InvoiceGenerationModal from './InvoiceGenerationModal';
 import { Invoice, InvoiceGenerationOptions, InvoiceStatus, InvoiceLineItem } from '../types/Invoice';
