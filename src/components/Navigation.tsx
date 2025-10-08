@@ -24,6 +24,7 @@ import { PageType, NavigationItem, AppState } from '../types/NavigationTypes';
 import { APP_CONFIG } from '../config/constants';
 import UndoRedoControls from './UndoRedoControls';
 import { useAuth } from '../contexts/AuthContext';
+import UserProfileModal from './UserProfileModal';
 
 interface NavigationProps {
   currentPage: PageType;
@@ -36,7 +37,8 @@ interface NavigationProps {
 const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appState, isCollapsed: externalCollapsed, onToggleCollapse }) => {
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const { user, signOut } = useAuth();
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const { user, userProfile, signOut, refreshProfile } = useAuth();
   const isCollapsed = externalCollapsed !== undefined ? externalCollapsed : internalCollapsed;
 
   const handleToggle = () => {
@@ -193,6 +195,13 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
       icon: 'settings',
       requiresData: 'none',
     },
+    {
+      id: PageType.USER_MANAGEMENT,
+      title: 'User Management',
+      description: 'Manage users',
+      icon: 'users',
+      requiresData: 'none',
+    },
   ];
 
   return (
@@ -272,7 +281,15 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
 
       {/* Navigation Items */}
       <div style={{ padding: '20px 0' }}>
-        {navigationItems.map((item) => {
+        {navigationItems
+          .filter(item => {
+            // Hide User Management for non-admins
+            if (item.id === PageType.USER_MANAGEMENT) {
+              return userProfile?.role === 'admin';
+            }
+            return true;
+          })
+          .map((item) => {
           const isActive = currentPage === item.id;
           const isEnabled = getDataStatus(item.requiresData);
 
@@ -499,6 +516,35 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
                 border: '1px solid #e0e0e0',
                 zIndex: 99
               }}>
+                {/* Profile Menu Item */}
+                <button
+                  onClick={() => {
+                    setShowProfileModal(true);
+                    setShowUserMenu(false);
+                  }}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '12px 16px',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    borderBottom: '1px solid #f0f0f0',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    color: '#333',
+                    fontWeight: '500',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <UserCircle size={18} />
+                  My Profile
+                </button>
+
+                {/* Sign Out Menu Item */}
                 <button
                   onClick={async () => {
                     try {
@@ -546,6 +592,13 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
           {APP_CONFIG.APP_VERSION}
         </div>
       )}
+
+      {/* User Profile Modal */}
+      <UserProfileModal
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        onSave={refreshProfile}
+      />
     </nav>
   );
 };

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { usersService } from '../services/api/users.service';
 import { Loader } from 'lucide-react';
 
 const AuthCallback: React.FC = () => {
@@ -40,7 +41,17 @@ const AuthCallback: React.FC = () => {
           }
 
           // Domain is valid, user can access the app
-          // The firm association will be handled by FirmContext based on email domain
+          // Create or update user profile
+          await usersService.upsertProfile(
+            data.session.user.id,
+            email,
+            firmData.id,
+            data.session.user.user_metadata
+          );
+
+          // Log the login
+          await usersService.logLogin();
+
           console.log('User authenticated successfully for firm:', firmData.firm_name);
 
           // Redirect to dashboard

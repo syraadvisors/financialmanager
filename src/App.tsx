@@ -59,6 +59,11 @@ const FirmSettingsPage = createLazyComponent(
   'FirmSettingsPage'
 );
 
+const UserManagementPage = createLazyComponent(
+  () => import('./components/UserManagementPage'),
+  'UserManagementPage'
+);
+
 // Lazy load heavy components that are conditionally rendered
 const GlobalSearch = lazy(() => import('./components/GlobalSearch'));
 const AdvancedFilters = lazy(() => import('./components/AdvancedFilters'));
@@ -180,6 +185,8 @@ const AppContent: React.FC = () => {
         );
       case PageType.FIRM_SETTINGS:
         return <FirmSettingsPage />;
+      case PageType.USER_MANAGEMENT:
+        return <UserManagementPage />;
       case PageType.OVERVIEW:
       default:
         return (
@@ -270,9 +277,9 @@ const AppContent: React.FC = () => {
 
 // Root App component with Context Providers and Routing
 const App: React.FC = () => {
-  // Firm ID for Test Financial Advisors (from Supabase)
-  // This will be replaced with JWT-based auth when Google OAuth is implemented
-  const DEFAULT_FIRM_ID = 'fb5368e4-ea10-48cc-becf-62580dca0895';
+  // TEMPORARY: Fallback firm ID for development until user profile loads
+  // This ensures the app doesn't hang while waiting for auth
+  const TEMP_FALLBACK_FIRM_ID = 'fb5368e4-ea10-48cc-becf-62580dca0895';
 
   return (
     <Routes>
@@ -286,7 +293,7 @@ const App: React.FC = () => {
         element={
           <ProtectedRoute>
             <AppProvider enablePersistence={true}>
-              <FirmProvider defaultFirmId={DEFAULT_FIRM_ID}>
+              <FirmProvider defaultFirmId={TEMP_FALLBACK_FIRM_ID}>
                 <SearchProvider>
                   <AppContent />
                 </SearchProvider>
