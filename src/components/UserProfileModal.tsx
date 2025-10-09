@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, User, Mail, Phone, Briefcase, Building2, Save, Shield, Bell, Globe, Clock } from 'lucide-react';
 import { UserProfile, UserProfileFormData, UserPreferencesFormData } from '../types/User';
 import { usersService } from '../services/api/users.service';
+import { useAuth } from '../contexts/AuthContext';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -45,15 +46,19 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, on
     setLoading(true);
     setError(null);
 
+    console.log('Loading user profile...');
     const response = await usersService.getCurrentUserProfile();
+    console.log('Profile response:', response);
 
     if (response.error) {
-      setError(response.error);
+      console.error('Profile load error:', response.error);
+      setError(`Failed to load profile: ${response.error}`);
       setLoading(false);
       return;
     }
 
     if (response.data) {
+      console.log('Profile data loaded:', response.data);
       setProfile(response.data);
       setProfileForm({
         fullName: response.data.fullName || '',
@@ -62,7 +67,20 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, on
         phoneNumber: response.data.phoneNumber || '',
         bio: response.data.bio || ''
       });
-      setPreferencesForm(response.data.preferences);
+      // Handle preferences - may be undefined or in different format
+      if (response.data.preferences) {
+        setPreferencesForm({
+          theme: response.data.preferences.theme || 'light',
+          notificationsEnabled: response.data.preferences.notificationsEnabled !== false,
+          emailNotifications: response.data.preferences.emailNotifications !== false,
+          language: response.data.preferences.language || 'en',
+          timezone: response.data.preferences.timezone || 'America/New_York',
+          rememberMe: response.data.preferences.rememberMe || false
+        });
+      }
+    } else {
+      console.error('No profile data returned');
+      setError('Profile not found. Please contact your administrator.');
     }
 
     setLoading(false);

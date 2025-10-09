@@ -17,6 +17,17 @@ import {
 } from './utils/bundleOptimization';
 import { useFinancialAppShortcuts } from './hooks/useKeyboardShortcuts';
 
+// Import marketing pages
+import {
+  HomePage,
+  FeaturesPage,
+  PricingPage,
+  AboutPage,
+  ContactPage,
+  SupportPage,
+  CompliancePage
+} from './public-pages/pages';
+
 // Lazy load all page components with enhanced code splitting
 const OverviewPage = createLazyComponent(
   () => import('./pages/OverviewPage'),
@@ -283,13 +294,22 @@ const App: React.FC = () => {
 
   return (
     <Routes>
-      {/* Public routes */}
+      {/* Public marketing routes - Default landing page */}
+      <Route path="/" element={<HomePage />} />
+      <Route path="/features" element={<FeaturesPage />} />
+      <Route path="/pricing" element={<PricingPage />} />
+      <Route path="/about" element={<AboutPage />} />
+      <Route path="/contact" element={<ContactPage />} />
+      <Route path="/support" element={<SupportPage />} />
+      <Route path="/compliance" element={<CompliancePage />} />
+
+      {/* Auth routes */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
 
-      {/* Protected routes */}
+      {/* Protected app routes */}
       <Route
-        path="/*"
+        path="/app/*"
         element={
           <ProtectedRoute>
             <AppProvider enablePersistence={true}>

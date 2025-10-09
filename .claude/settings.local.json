@@ -17,7 +17,9 @@
       "Bash(findstr:*)",
       "Bash(tasklist:*)",
       "Bash(netstat:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(dir:*)",
+      "Read(//s/DS920NAS/NAS-Work/Software Development/website/**)"
     ],
     "deny": [],
     "ask": []

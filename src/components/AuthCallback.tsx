@@ -55,7 +55,7 @@ const AuthCallback: React.FC = () => {
           console.log('User authenticated successfully for firm:', firmData.firm_name);
 
           // Redirect to dashboard
-          navigate('/');
+          navigate('/app');
         } else {
           throw new Error('No session found');
         }

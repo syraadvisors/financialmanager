@@ -208,15 +208,17 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
     <nav style={{
       backgroundColor: 'white',
       borderRight: '1px solid #e0e0e0',
-      padding: '20px 0',
       minHeight: '100vh',
+      height: '100vh',
       width: isCollapsed ? '80px' : '280px',
       position: 'fixed',
       left: 0,
       top: 0,
-      overflowY: 'auto',
       zIndex: 90,
       transition: 'width 0.3s ease',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
     }}>
       {/* App Header */}
       <div style={{
@@ -279,8 +281,13 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
         </button>
       </div>
 
-      {/* Navigation Items */}
-      <div style={{ padding: '20px 0' }}>
+      {/* Navigation Items - Scrollable */}
+      <div style={{
+        flex: 1,
+        overflowY: 'auto',
+        padding: '12px 0',
+        minHeight: 0  // Important for flexbox scrolling
+      }}>
         {navigationItems
           .filter(item => {
             // Hide User Management for non-admins
@@ -303,7 +310,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
                   alignItems: 'center',
                   justifyContent: isCollapsed ? 'center' : 'space-between',
                   width: '100%',
-                  padding: isCollapsed ? '12px 8px' : '12px 16px',
+                  padding: isCollapsed ? '10px 8px' : '10px 12px',
                   backgroundColor: isActive ? '#2196f3' : 'transparent',
                   color: isActive ? 'white' : isEnabled ? '#333' : '#ccc',
                   border: 'none',
@@ -340,17 +347,17 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
                   {!isCollapsed && (
                     <div>
                       <div style={{
-                        fontSize: '14px',
+                        fontSize: '13px',
                         fontWeight: isActive ? 'bold' : 'normal',
                         lineHeight: 1.2,
                       }}>
                         {item.title}
                       </div>
                       <div style={{
-                        fontSize: '11px',
+                        fontSize: '10px',
                         opacity: 0.8,
                         lineHeight: 1.2,
-                        marginTop: '2px',
+                        marginTop: '1px',
                       }}>
                         {item.description}
                       </div>
@@ -391,11 +398,11 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
       {/* Status Indicators */}
       {!isCollapsed && (
         <div style={{
-          padding: '20px 20px 10px 20px',
+          padding: '12px 20px 8px 20px',
           borderTop: '1px solid #f0f0f0',
-          marginTop: 'auto',
+          flexShrink: 0,
         }}>
-          <div style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
+          <div style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
             <strong>Data Status</strong>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -433,7 +440,10 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
 
       {/* Undo/Redo Controls */}
       {!isCollapsed && (
-        <div style={{ padding: '10px 20px' }}>
+        <div style={{
+          padding: '8px 20px',
+          flexShrink: 0
+        }}>
           <UndoRedoControls />
         </div>
       )}
@@ -441,9 +451,9 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
       {/* User Profile Section */}
       {user && (
         <div style={{
-          padding: isCollapsed ? '10px 12px' : '10px 20px',
+          padding: isCollapsed ? '8px 12px' : '8px 20px',
           borderTop: '1px solid #f0f0f0',
-          marginTop: 'auto',
+          flexShrink: 0,
           position: 'relative'
         }}>
           <button
@@ -453,7 +463,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
               display: 'flex',
               alignItems: 'center',
               gap: '12px',
-              padding: '10px',
+              padding: '8px',
               backgroundColor: 'transparent',
               border: 'none',
               borderRadius: '8px',
@@ -465,15 +475,15 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
             title={isCollapsed ? user.email || 'User menu' : undefined}
           >
             <div style={{
-              width: '40px',
-              height: '40px',
+              width: '36px',
+              height: '36px',
               borderRadius: '50%',
               backgroundColor: '#667eea',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: 'white',
-              fontSize: '16px',
+              fontSize: '14px',
               fontWeight: 'bold',
               flexShrink: 0
             }}>
@@ -481,10 +491,10 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
             </div>
             {!isCollapsed && (
               <div style={{ flex: 1, textAlign: 'left', overflow: 'hidden' }}>
-                <div style={{ fontSize: '14px', fontWeight: '600', color: '#333', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div style={{ fontSize: '13px', fontWeight: '600', color: '#333', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {user.user_metadata?.full_name || user.email?.split('@')[0]}
                 </div>
-                <div style={{ fontSize: '12px', color: '#999', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div style={{ fontSize: '11px', color: '#999', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {user.email}
                 </div>
               </div>
