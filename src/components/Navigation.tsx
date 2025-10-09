@@ -222,7 +222,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
     }}>
       {/* App Header */}
       <div style={{
-        padding: isCollapsed ? '0 8px 24px 8px' : '0 20px 24px 20px',
+        padding: isCollapsed ? '28px 8px 28px 8px' : '28px 20px 28px 20px',
         borderBottom: '1px solid #f0f0f0',
         display: 'flex',
         flexDirection: isCollapsed ? 'column' : 'row',

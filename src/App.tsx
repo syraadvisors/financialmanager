@@ -81,6 +81,7 @@ const AdvancedFilters = lazy(() => import('./components/AdvancedFilters'));
 const QuickFilters = lazy(() => import('./components/QuickFilters'));
 const CommandPalette = lazy(() => import('./components/CommandPalette'));
 const HelpModal = lazy(() => import('./components/HelpModal'));
+const SessionExpiryNotification = lazy(() => import('./components/SessionExpiryNotification'));
 
 // Main App component that uses the context
 const AppContent: React.FC = () => {
@@ -281,6 +282,11 @@ const AppContent: React.FC = () => {
           isOpen={showHelpModal}
           onClose={() => setShowHelpModal(false)}
         />
+      </Suspense>
+
+      {/* Session Expiry Notification */}
+      <Suspense fallback={null}>
+        <SessionExpiryNotification />
       </Suspense>
     </div>
   );

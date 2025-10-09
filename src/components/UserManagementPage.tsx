@@ -4,6 +4,8 @@ import { UserProfile, UserRole, UserStatus } from '../types/User';
 import { usersService } from '../services/api/users.service';
 import { useFirm } from '../contexts/FirmContext';
 import { useAuth } from '../contexts/AuthContext';
+import ErrorBoundary from './ErrorBoundary';
+import LoadingSkeleton from './LoadingSkeleton';
 
 const UserManagementPage: React.FC = () => {
   const { firmId } = useFirm();
@@ -119,36 +121,16 @@ const UserManagementPage: React.FC = () => {
   }
 
   if (loading) {
-    return (
-      <div style={{
-        padding: '40px',
-        textAlign: 'center'
-      }}>
-        <div style={{
-          width: '48px',
-          height: '48px',
-          border: '4px solid #e5e7eb',
-          borderTopColor: '#2196f3',
-          borderRadius: '50%',
-          margin: '0 auto 16px',
-          animation: 'spin 1s linear infinite'
-        }} />
-        <p style={{ color: '#6b7280' }}>Loading users...</p>
-        <style>{`
-          @keyframes spin {
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
-      </div>
-    );
+    return <LoadingSkeleton type="page" />;
   }
 
   return (
-    <div style={{
-      padding: '24px',
-      maxWidth: '1400px',
-      margin: '0 auto'
-    }}>
+    <ErrorBoundary level="page">
+      <div style={{
+        padding: '24px',
+        maxWidth: '1400px',
+        margin: '0 auto'
+      }}>
       {/* Header */}
       <div style={{
         marginBottom: '24px',
@@ -575,6 +557,7 @@ const UserManagementPage: React.FC = () => {
         </div>
       </div>
     </div>
+  </ErrorBoundary>
   );
 };
 

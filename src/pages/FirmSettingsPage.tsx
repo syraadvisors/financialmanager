@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Building2, Mail, Phone, MapPin, Save, Upload, FileText, DollarSign, Users } from 'lucide-react';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 interface FirmSettings {
   companyName: string;
@@ -83,7 +84,8 @@ const FirmSettingsPage: React.FC = () => {
   });
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+    <ErrorBoundary level="page">
+      <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       {/* Header */}
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '8px', color: '#1a202c' }}>
@@ -447,6 +449,7 @@ const FirmSettingsPage: React.FC = () => {
         </div>
       </div>
     </div>
+  </ErrorBoundary>
   );
 };
 

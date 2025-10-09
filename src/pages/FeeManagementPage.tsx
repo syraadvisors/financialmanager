@@ -9,6 +9,8 @@ import {
   DollarSign,
   TrendingUp
 } from 'lucide-react';
+import ErrorBoundary from '../components/ErrorBoundary';
+import LoadingSkeleton from '../components/LoadingSkeleton';
 import ClientsPage from '../components/ClientsPage';
 import AccountsPage from '../components/AccountsPage';
 import MasterAccountsPage from '../components/MasterAccountsPage';
@@ -135,17 +137,7 @@ const FeeManagementPage: React.FC<FeeManagementPageProps> = ({ activeTab: initia
                 Run calculations, view detailed breakdowns, and validate fee logic.
               </p>
             </div>
-            <Suspense fallback={
-              <div style={{
-                padding: '40px',
-                textAlign: 'center',
-                color: '#666',
-                backgroundColor: '#f5f5f5',
-                borderRadius: '8px'
-              }}>
-                Loading Fee Calculator...
-              </div>
-            }>
+            <Suspense fallback={<LoadingSkeleton type="chart" />}>
               <FeeCalculationDemo />
             </Suspense>
           </div>
@@ -181,12 +173,14 @@ const FeeManagementPage: React.FC<FeeManagementPageProps> = ({ activeTab: initia
   };
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
-      {/* Tab Content */}
-      <div style={{ minHeight: '500px' }}>
-        {renderTabContent()}
+    <ErrorBoundary level="page">
+      <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
+        {/* Tab Content */}
+        <div style={{ minHeight: '500px' }}>
+          {renderTabContent()}
+        </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 };
 

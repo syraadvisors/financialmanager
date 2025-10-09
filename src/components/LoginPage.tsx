@@ -1,11 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Shield, BarChart3 } from 'lucide-react';
+import { Shield, BarChart3, AlertCircle, Clock } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
   const { signInWithGoogle } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [logoutReason, setLogoutReason] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Check if user was logged out due to session expiry
+    const reason = sessionStorage.getItem('logout_reason');
+    if (reason) {
+      setLogoutReason(reason);
+      sessionStorage.removeItem('logout_reason');
+    }
+  }, []);
 
   const handleGoogleSignIn = async () => {
     try {
@@ -66,6 +76,45 @@ const LoginPage: React.FC = () => {
         }}>
           Comprehensive fee management platform
         </p>
+
+        {/* Logout Reason Message */}
+        {logoutReason && (
+          <div style={{
+            marginBottom: '24px',
+            padding: '12px 16px',
+            backgroundColor: logoutReason === 'expired' ? '#fff3cd' : '#fff5f5',
+            border: `1px solid ${logoutReason === 'expired' ? '#ffc107' : '#feb2b2'}`,
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+            textAlign: 'left'
+          }}>
+            {logoutReason === 'expired' ? (
+              <Clock size={20} color="#ff9800" style={{ flexShrink: 0, marginTop: '2px' }} />
+            ) : (
+              <AlertCircle size={20} color="#f44336" style={{ flexShrink: 0, marginTop: '2px' }} />
+            )}
+            <div>
+              <strong style={{
+                display: 'block',
+                marginBottom: '4px',
+                color: logoutReason === 'expired' ? '#856404' : '#c53030',
+                fontSize: '14px'
+              }}>
+                {logoutReason === 'expired' ? 'Session Expired' : 'Authentication Error'}
+              </strong>
+              <span style={{
+                fontSize: '13px',
+                color: logoutReason === 'expired' ? '#856404' : '#c53030'
+              }}>
+                {logoutReason === 'expired'
+                  ? 'Your session has expired for security reasons. Please sign in again to continue.'
+                  : 'An authentication error occurred. Please sign in again.'}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Features */}
         <div style={{
