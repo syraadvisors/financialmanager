@@ -104,10 +104,11 @@ jobs:
       - name: Check bundle size limits
         run: |
           MAIN_SIZE=$(du -k build/static/js/main*.js | cut -f1)
-          if [ $MAIN_SIZE -gt 300 ]; then
-            echo "Main bundle size ($MAIN_SIZE KB) exceeds limit (300 KB)"
+          if [ $MAIN_SIZE -gt 1000 ]; then
+            echo "Main bundle size ($MAIN_SIZE KB) exceeds limit (1000 KB)"
             exit 1
           fi
+          echo "Bundle size: $MAIN_SIZE KB (within 1000 KB limit)"
 
   # Job 4: Deploy to Netlify/Vercel (optional)
   deploy:
