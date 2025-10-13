@@ -24,7 +24,15 @@
       "Bash(move \"08_dev_temporary_rls.sql\" deprecated )",
       "Bash(move \"09_fix_anon_access.sql\" deprecated )",
       "Bash(move \"10_fix_firms_rls_for_oauth.sql\" deprecated )",
-      "Bash(move \"11_simplified_firms_rls.sql\" deprecated)"
+      "Bash(move \"11_simplified_firms_rls.sql\" deprecated)",
+      "Bash(npm run test:ci:*)",
+      "Bash(git push:*)",
+      "Bash(set DISABLE_ESLINT_PLUGIN=true)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfix: disable ESLint plugin during CI build to prevent warnings from failing build\n\nReact Scripts treats ESLint warnings as errors in CI environments by default,\ncausing the build to fail even though these are only warnings. This commit:\n\n1. Adds DISABLE_ESLINT_PLUGIN=true environment variable to build steps\n2. Applies to all build jobs: build-and-test, bundle-size, and deploy\n3. Keeps the separate lint step to show warnings without blocking build\n\nThe linter still runs separately (line 27-28) to report issues, but build\nfailures are now only caused by actual compilation errors, not lint warnings.\n\nThis is a standard practice for CI/CD pipelines where warnings should be\nvisible but not blocking.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfix: mock react-router-dom before import to resolve module resolution issue\n\nThe App.test.tsx was failing in CI with \"Cannot find module 'react-router-dom'\"\neven though the package is installed. This is a Jest module resolution issue.\n\nSolution:\n1. Mock react-router-dom at the top of the file before any imports\n2. Use jest.requireActual to preserve actual exports where needed\n3. Mock the key components (BrowserRouter, Routes, Route, Navigate)\n4. Mock the hooks (useNavigate, useLocation)\n5. Import App after all mocks are set up\n\nThis ensures Jest properly resolves and mocks the module before attempting\nto load App.tsx which depends on react-router-dom.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git commit:*)",
+      "Bash(git rm:*)"
     ],
     "deny": [],
     "ask": []
