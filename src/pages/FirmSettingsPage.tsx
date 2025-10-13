@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
-import { Building2, Mail, Phone, MapPin, Save, Upload, FileText, DollarSign, Users } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Building2, Mail, Phone, MapPin, Save, Upload, FileText, DollarSign, Users, X, Camera } from 'lucide-react';
+import toast from 'react-hot-toast';
 import ErrorBoundary from '../components/ErrorBoundary';
+import { firmsService, FirmSettings as ApiFirmSettings } from '../services/api/firms.service';
+import AddressAutocomplete from '../components/AddressAutocomplete';
 
 interface FirmSettings {
+  id?: string;
   companyName: string;
   legalName: string;
   address: string;
@@ -21,16 +25,16 @@ interface FirmSettings {
 
 const FirmSettingsPage: React.FC = () => {
   const [settings, setSettings] = useState<FirmSettings>({
-    companyName: 'Your Firm Name',
-    legalName: 'Your Firm Name, LLC',
-    address: '123 Main Street, Suite 100',
-    city: 'New York',
-    state: 'NY',
-    zipCode: '10001',
-    phone: '(555) 123-4567',
-    email: 'billing@yourfirm.com',
-    website: 'www.yourfirm.com',
-    taxId: '12-3456789',
+    companyName: '',
+    legalName: '',
+    address: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    phone: '',
+    email: '',
+    website: '',
+    taxId: '',
     logoUrl: '',
     primaryColor: '#2196f3',
     defaultInvoiceTerms: 30,
@@ -38,20 +42,152 @@ const FirmSettingsPage: React.FC = () => {
   });
 
   const [activeTab, setActiveTab] = useState<'general' | 'branding' | 'billing'>('general');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSave = () => {
-    // Save settings logic here
-    alert('Firm settings saved successfully!');
+  useEffect(() => {
+    loadFirmSettings();
+  }, []);
+
+  const loadFirmSettings = async () => {
+    setLoading(true);
+    const response = await firmsService.getFirmSettings();
+
+    if (response.error) {
+      toast.error(`Failed to load firm settings: ${response.error}`);
+      setLoading(false);
+      return;
+    }
+
+    if (response.data) {
+      setSettings({
+        id: response.data.id,
+        companyName: response.data.firmName || '',
+        legalName: response.data.legalName || '',
+        address: response.data.address || '',
+        city: response.data.city || '',
+        state: response.data.state || '',
+        zipCode: response.data.zipCode || '',
+        phone: response.data.phone || '',
+        email: response.data.email || '',
+        website: response.data.website || '',
+        taxId: response.data.taxId || '',
+        logoUrl: response.data.logoUrl || '',
+        primaryColor: response.data.primaryColor || '#2196f3',
+        defaultInvoiceTerms: response.data.defaultInvoiceTerms || 30,
+        defaultInvoiceMessage: response.data.defaultInvoiceMessage || 'Thank you for your business. Please remit payment by the due date.',
+      });
+      setLogoPreview(response.data.logoUrl || null);
+    }
+
+    setLoading(false);
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSettings({ ...settings, logoUrl: reader.result as string });
-      };
-      reader.readAsDataURL(file);
+  const handleSave = async () => {
+    if (!settings.id) {
+      toast.error('No firm ID found');
+      return;
+    }
+
+    setSaving(true);
+    const loadingToast = toast.loading('Saving firm settings...');
+
+    const response = await firmsService.updateFirmSettings(settings.id, {
+      firmName: settings.companyName,
+      legalName: settings.legalName,
+      address: settings.address,
+      city: settings.city,
+      state: settings.state,
+      zipCode: settings.zipCode,
+      phone: settings.phone,
+      email: settings.email,
+      website: settings.website,
+      taxId: settings.taxId,
+      primaryColor: settings.primaryColor,
+      defaultInvoiceTerms: settings.defaultInvoiceTerms,
+      defaultInvoiceMessage: settings.defaultInvoiceMessage,
+    });
+
+    if (response.error) {
+      toast.error(response.error, { id: loadingToast });
+    } else {
+      toast.success('Firm settings saved successfully!', { id: loadingToast });
+    }
+
+    setSaving(false);
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/svg+xml', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      toast.error('Please select a valid image file (JPEG, PNG, SVG, or WebP)');
+      return;
+    }
+
+    // Validate file size (max 2MB)
+    const maxSize = 2 * 1024 * 1024; // 2MB in bytes
+    if (file.size > maxSize) {
+      toast.error('Image size must be less than 2MB');
+      return;
+    }
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setLogoPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // Upload the file
+    handleLogoUpload(file);
+  };
+
+  const handleLogoUpload = async (file: File) => {
+    if (!settings.id) {
+      toast.error('No firm ID found');
+      return;
+    }
+
+    setUploading(true);
+    const loadingToast = toast.loading('Uploading logo...');
+
+    const response = await firmsService.uploadLogo(settings.id, file);
+
+    if (response.error) {
+      toast.error(response.error, { id: loadingToast });
+      // Reset preview on error
+      setLogoPreview(settings.logoUrl || null);
+    } else if (response.data) {
+      toast.success('Logo uploaded successfully!', { id: loadingToast });
+      setSettings(prev => ({ ...prev, logoUrl: response.data!.logoUrl }));
+    }
+
+    setUploading(false);
+  };
+
+  const handleRemoveLogo = async () => {
+    if (!settings.id) {
+      toast.error('No firm ID found');
+      return;
+    }
+
+    const loadingToast = toast.loading('Removing logo...');
+
+    const response = await firmsService.removeLogo(settings.id);
+
+    if (response.error) {
+      toast.error(response.error, { id: loadingToast });
+    } else {
+      toast.success('Logo removed successfully!', { id: loadingToast });
+      setLogoPreview(null);
+      setSettings(prev => ({ ...prev, logoUrl: '' }));
     }
   };
 
@@ -82,6 +218,27 @@ const FirmSettingsPage: React.FC = () => {
     fontWeight: isActive ? '600' : '400',
     transition: 'all 0.2s',
   });
+
+  if (loading) {
+    return (
+      <ErrorBoundary level="page">
+        <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', padding: '80px 20px', color: '#64748b' }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              border: '4px solid #e5e7eb',
+              borderTopColor: '#2196f3',
+              borderRadius: '50%',
+              animation: 'spin 0.8s linear infinite',
+              margin: '0 auto 16px'
+            }} />
+            Loading firm settings...
+          </div>
+        </div>
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <ErrorBoundary level="page">
@@ -161,10 +318,20 @@ const FirmSettingsPage: React.FC = () => {
                 <MapPin size={16} style={{ display: 'inline', marginRight: '6px' }} />
                 Street Address *
               </label>
-              <input
-                type="text"
+              <AddressAutocomplete
                 value={settings.address}
-                onChange={(e) => setSettings({ ...settings, address: e.target.value })}
+                onChange={(value) => setSettings({ ...settings, address: value })}
+                onAddressSelect={(addressComponents) => {
+                  // Auto-populate city, state, and zip when address is selected
+                  setSettings({
+                    ...settings,
+                    address: addressComponents.street,
+                    city: addressComponents.city,
+                    state: addressComponents.state,
+                    zipCode: addressComponents.zipCode
+                  });
+                }}
+                placeholder="Start typing to search for addresses..."
                 style={inputStyle}
               />
             </div>
@@ -269,29 +436,75 @@ const FirmSettingsPage: React.FC = () => {
                 textAlign: 'center',
                 backgroundColor: '#f8fafc',
               }}>
-                {settings.logoUrl ? (
+                {logoPreview ? (
                   <div>
                     <img
-                      src={settings.logoUrl}
+                      src={logoPreview}
                       alt="Company Logo"
-                      style={{ maxWidth: '200px', maxHeight: '100px', marginBottom: '16px' }}
+                      style={{
+                        maxWidth: '300px',
+                        maxHeight: '150px',
+                        marginBottom: '16px',
+                        objectFit: 'contain'
+                      }}
                     />
-                    <div>
-                      <label
-                        htmlFor="logo-upload"
+                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
                         style={{
-                          display: 'inline-block',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
                           padding: '8px 16px',
-                          backgroundColor: '#2196f3',
+                          backgroundColor: uploading ? '#93c5fd' : '#2196f3',
                           color: 'white',
+                          border: 'none',
                           borderRadius: '6px',
-                          cursor: 'pointer',
+                          cursor: uploading ? 'not-allowed' : 'pointer',
                           fontSize: '14px',
+                          fontWeight: '500',
                         }}
                       >
-                        <Upload size={16} style={{ display: 'inline', marginRight: '6px' }} />
-                        Change Logo
-                      </label>
+                        {uploading ? (
+                          <>
+                            <div style={{
+                              width: '14px',
+                              height: '14px',
+                              border: '2px solid white',
+                              borderTopColor: 'transparent',
+                              borderRadius: '50%',
+                              animation: 'spin 0.6s linear infinite'
+                            }} />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload size={16} />
+                            Change Logo
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={handleRemoveLogo}
+                        disabled={uploading}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '8px 16px',
+                          backgroundColor: 'white',
+                          color: '#dc2626',
+                          border: '1px solid #fecaca',
+                          borderRadius: '6px',
+                          cursor: uploading ? 'not-allowed' : 'pointer',
+                          fontSize: '14px',
+                          fontWeight: '500',
+                        }}
+                      >
+                        <X size={16} />
+                        Remove
+                      </button>
                     </div>
                   </div>
                 ) : (
@@ -300,33 +513,53 @@ const FirmSettingsPage: React.FC = () => {
                     <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '16px' }}>
                       Upload your company logo
                     </p>
-                    <label
-                      htmlFor="logo-upload"
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
                       style={{
-                        display: 'inline-block',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
                         padding: '10px 20px',
-                        backgroundColor: '#2196f3',
+                        backgroundColor: uploading ? '#93c5fd' : '#2196f3',
                         color: 'white',
+                        border: 'none',
                         borderRadius: '6px',
-                        cursor: 'pointer',
+                        cursor: uploading ? 'not-allowed' : 'pointer',
                         fontSize: '14px',
                         fontWeight: '500',
                       }}
                     >
-                      <Upload size={16} style={{ display: 'inline', marginRight: '6px' }} />
-                      Upload Logo
-                    </label>
+                      {uploading ? (
+                        <>
+                          <div style={{
+                            width: '14px',
+                            height: '14px',
+                            border: '2px solid white',
+                            borderTopColor: 'transparent',
+                            borderRadius: '50%',
+                            animation: 'spin 0.6s linear infinite'
+                          }} />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={16} />
+                          Upload Logo
+                        </>
+                      )}
+                    </button>
                   </div>
                 )}
                 <input
-                  id="logo-upload"
+                  ref={fileInputRef}
                   type="file"
-                  accept="image/*"
-                  onChange={handleLogoUpload}
+                  accept="image/jpeg,image/jpg,image/png,image/svg+xml,image/webp"
+                  onChange={handleFileSelect}
                   style={{ display: 'none' }}
                 />
                 <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '12px' }}>
-                  Recommended: PNG or JPG, max 2MB, transparent background preferred
+                  PNG, JPG, SVG, or WebP. Max 2MB. Transparent background preferred.
                 </p>
               </div>
             </div>
@@ -429,22 +662,39 @@ const FirmSettingsPage: React.FC = () => {
         }}>
           <button
             onClick={handleSave}
+            disabled={saving}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
               padding: '12px 24px',
-              backgroundColor: '#2196f3',
+              backgroundColor: saving ? '#93c5fd' : '#2196f3',
               color: 'white',
               border: 'none',
               borderRadius: '6px',
               fontSize: '14px',
               fontWeight: '600',
-              cursor: 'pointer',
+              cursor: saving ? 'not-allowed' : 'pointer',
             }}
           >
-            <Save size={18} />
-            Save Settings
+            {saving ? (
+              <>
+                <div style={{
+                  width: '16px',
+                  height: '16px',
+                  border: '2px solid white',
+                  borderTopColor: 'transparent',
+                  borderRadius: '50%',
+                  animation: 'spin 0.6s linear infinite'
+                }} />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save size={18} />
+                Save Settings
+              </>
+            )}
           </button>
         </div>
       </div>

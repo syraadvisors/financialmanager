@@ -19,7 +19,12 @@
       "Bash(netstat:*)",
       "Bash(timeout:*)",
       "Bash(dir:*)",
-      "Read(//s/DS920NAS/NAS-Work/Software Development/website/**)"
+      "Read(//s/DS920NAS/NAS-Work/Software Development/website/**)",
+      "Bash(move \"08_update_rls_for_multi_tenant.sql\" deprecated )",
+      "Bash(move \"08_dev_temporary_rls.sql\" deprecated )",
+      "Bash(move \"09_fix_anon_access.sql\" deprecated )",
+      "Bash(move \"10_fix_firms_rls_for_oauth.sql\" deprecated )",
+      "Bash(move \"11_simplified_firms_rls.sql\" deprecated)"
     ],
     "deny": [],
     "ask": []

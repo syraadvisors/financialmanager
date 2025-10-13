@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { usersService } from '../services/api/users.service';
-import { Loader } from 'lucide-react';
+import LoadingSkeleton from './LoadingSkeleton';
 
 const AuthCallback: React.FC = () => {
   const navigate = useNavigate();
@@ -61,7 +62,9 @@ const AuthCallback: React.FC = () => {
         }
       } catch (err: any) {
         console.error('Auth callback error:', err);
-        setError(err.message || 'Authentication failed');
+        const errorMessage = err.message || 'Authentication failed';
+        setError(errorMessage);
+        toast.error(errorMessage, { duration: 5000 });
 
         // Redirect to login after 3 seconds
         setTimeout(() => {
@@ -115,30 +118,7 @@ const AuthCallback: React.FC = () => {
     );
   }
 
-  return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: '#f7fafc'
-    }}>
-      <div style={{ textAlign: 'center' }}>
-        <Loader size={48} color="#667eea" style={{
-          animation: 'spin 1s linear infinite',
-          margin: '0 auto 16px'
-        }} />
-        <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#4a5568' }}>
-          Completing sign in...
-        </h2>
-      </div>
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
-    </div>
-  );
+  return <LoadingSkeleton type="page" />;
 };
 
 export default AuthCallback;

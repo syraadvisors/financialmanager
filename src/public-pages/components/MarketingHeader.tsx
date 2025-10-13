@@ -18,24 +18,59 @@ const MarketingHeader: React.FC<MarketingHeaderProps> = ({ onLoginClick }) => {
     // Check if user is logged in
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
+      console.log('[MarketingHeader] checkUser - user:', user);
+
       if (user) {
         setUser(user);
 
+        console.log('[MarketingHeader] Querying user_profiles for user.id:', user.id);
+
         // Get user profile for initials
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from('user_profiles')
-          .select('user_first_name, user_last_name')
-          .eq('user_id', user.id)
+          .select('full_name, first_name, last_name, user_first_name, user_last_name')
+          .eq('id', user.id)
           .single();
 
+        console.log('[MarketingHeader] Profile data:', profile);
+        console.log('[MarketingHeader] Profile error:', profileError);
+        console.log('[MarketingHeader] User email fallback:', user.email);
+
         if (profile) {
-          const initials =
-            (profile.user_first_name?.[0] || '') +
-            (profile.user_last_name?.[0] || '');
-          setUserInitials(initials.toUpperCase());
-        } else if (user.email) {
-          setUserInitials(user.email[0].toUpperCase());
+          // Try different column name combinations
+          const firstName = profile.first_name || profile.user_first_name;
+          const lastName = profile.last_name || profile.user_last_name;
+
+          console.log('[MarketingHeader] firstName:', firstName, 'lastName:', lastName);
+
+          if (firstName || lastName) {
+            const initials = (firstName?.[0] || '') + (lastName?.[0] || '');
+            console.log('[MarketingHeader] Setting initials from name:', initials);
+            setUserInitials(initials.toUpperCase());
+          } else if (profile.full_name) {
+            // Try to extract from full_name
+            const nameParts = profile.full_name.split(' ');
+            const initials = (nameParts[0]?.[0] || '') + (nameParts[nameParts.length - 1]?.[0] || '');
+            console.log('[MarketingHeader] Setting initials from full_name:', initials);
+            setUserInitials(initials.toUpperCase());
+          } else {
+            // No name in profile, use email
+            console.log('[MarketingHeader] No name in profile, using email');
+            if (user.email) {
+              setUserInitials(user.email[0].toUpperCase());
+            }
+          }
+        } else {
+          // Profile query failed or returned null, use email fallback
+          console.log('[MarketingHeader] Profile is null or error, using email fallback');
+          if (user.email) {
+            setUserInitials(user.email[0].toUpperCase());
+          }
         }
+      } else {
+        // Clear user state when no user is logged in
+        setUser(null);
+        setUserInitials('');
       }
     };
 
@@ -43,7 +78,38 @@ const MarketingHeader: React.FC<MarketingHeaderProps> = ({ onLoginClick }) => {
 
     // Subscribe to auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
+      if (session?.user) {
+        setUser(session.user);
+        // Fetch profile for initials when user logs in
+        supabase
+          .from('user_profiles')
+          .select('full_name, first_name, last_name, user_first_name, user_last_name')
+          .eq('id', session.user.id)
+          .single()
+          .then(({ data: profile }) => {
+            if (profile) {
+              const firstName = profile.first_name || profile.user_first_name;
+              const lastName = profile.last_name || profile.user_last_name;
+
+              if (firstName || lastName) {
+                const initials = (firstName?.[0] || '') + (lastName?.[0] || '');
+                setUserInitials(initials.toUpperCase());
+              } else if (profile.full_name) {
+                const nameParts = profile.full_name.split(' ');
+                const initials = (nameParts[0]?.[0] || '') + (nameParts[nameParts.length - 1]?.[0] || '');
+                setUserInitials(initials.toUpperCase());
+              } else if (session.user.email) {
+                setUserInitials(session.user.email[0].toUpperCase());
+              }
+            } else if (session.user.email) {
+              setUserInitials(session.user.email[0].toUpperCase());
+            }
+          });
+      } else {
+        // User logged out - clear state immediately
+        setUser(null);
+        setUserInitials('');
+      }
     });
 
     return () => {
@@ -55,6 +121,10 @@ const MarketingHeader: React.FC<MarketingHeaderProps> = ({ onLoginClick }) => {
     // Navigate to the app dashboard
     navigate('/app');
   };
+
+  // Debug logging
+  console.log('[MarketingHeader] user:', user);
+  console.log('[MarketingHeader] userInitials:', userInitials);
 
   return (
     <nav className="marketing-nav">

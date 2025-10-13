@@ -1,0 +1,61 @@
+/* Responsive Layout Styles for App */
+
+/* Main content area */
+.app-main-content {
+  margin-left: 280px;
+  flex: 1;
+  transition: margin-left 0.3s ease;
+  background-color: var(--bg-primary);
+  min-height: 100vh;
+}
+
+.app-main-content.collapsed {
+  margin-left: 80px;
+}
+
+/* Mobile - No left margin, full width */
+@media (max-width: 768px) {
+  .app-main-content {
+    margin-left: 0 !important;
+    width: 100%;
+  }
+
+  .app-main-content.collapsed {
+    margin-left: 0 !important;
+  }
+}
+
+/* Search bar adjustments for mobile */
+.app-search-bar {
+  padding: 16px 24px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-primary);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+@media (max-width: 768px) {
+  .app-search-bar {
+    padding: 12px 16px;
+    padding-top: 72px; /* Space for hamburger button */
+  }
+}
+
+@media (max-width: 480px) {
+  .app-search-bar {
+    padding: 8px 12px;
+    padding-top: 72px;
+  }
+}
+
+/* Tablet adjustments */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .app-main-content {
+    margin-left: 240px;
+  }
+
+  .app-main-content.collapsed {
+    margin-left: 70px;
+  }
+}

@@ -327,7 +327,11 @@ export const SearchProvider: React.FC<SearchProviderProps> = ({ children }) => {
     }
   }, [state.searchHistory, state.savedFilters]);
 
-  // Search utility functions
+  // Performance configuration
+  const MAX_SEARCH_RESULTS = 1000; // Limit results to prevent performance issues
+  const SEARCH_BATCH_SIZE = 100; // Process items in batches
+
+  // Search utility functions - optimized with early returns
   const searchInText = useCallback((text: string, query: string): boolean => {
     if (!text || !query) return false;
     return text.toLowerCase().includes(query.toLowerCase());
@@ -338,27 +342,50 @@ export const SearchProvider: React.FC<SearchProviderProps> = ({ children }) => {
     return number.toString().includes(query);
   }, []);
 
+  // Optimized search with early termination for better performance
   const searchInObject = useCallback((obj: any, query: string): boolean => {
     if (!obj || !query) return false;
 
-    const searchableFields = Object.values(obj).filter(value =>
-      value !== null && value !== undefined
-    );
+    const lowerQuery = query.toLowerCase();
 
-    return searchableFields.some(value => {
-      if (value === null || value === undefined) return false;
-      const strValue = value.toString().toLowerCase();
-      return strValue.includes(query.toLowerCase());
-    });
+    // Fast path: check common fields first (most likely to match)
+    const priorityFields = ['accountNumber', 'symbol', 'accountName', 'cusip', 'description'];
+
+    for (const field of priorityFields) {
+      const value = obj[field];
+      if (value !== null && value !== undefined) {
+        const strValue = value.toString().toLowerCase();
+        if (strValue.includes(lowerQuery)) {
+          return true; // Early termination
+        }
+      }
+    }
+
+    // Then check remaining fields
+    const allFields = Object.keys(obj);
+    for (const key of allFields) {
+      if (priorityFields.includes(key)) continue; // Skip already checked fields
+
+      const value = obj[key];
+      if (value !== null && value !== undefined) {
+        const strValue = value.toString().toLowerCase();
+        if (strValue.includes(lowerQuery)) {
+          return true; // Early termination
+        }
+      }
+    }
+
+    return false;
   }, []);
 
-  // Enhanced global search implementation with history tracking
+  // Enhanced global search implementation with history tracking and result limiting
   const performGlobalSearch = useCallback((query: string, source: SearchHistoryEntry['source'] = 'manual') => {
     const startTime = performance.now();
     dispatch({ type: 'SET_GLOBAL_QUERY', payload: query });
 
     if (!query.trim()) {
       dispatch({ type: 'SET_GLOBAL_RESULTS', payload: { balanceData: [], positionsData: [], totalResults: 0 } });
+      dispatch({ type: 'SET_SEARCHING', payload: false });
       return;
     }
 
@@ -367,20 +394,38 @@ export const SearchProvider: React.FC<SearchProviderProps> = ({ children }) => {
     // Add to context history (for immediate UI updates)
     dispatch({ type: 'ADD_TO_HISTORY', payload: query });
 
-    // Search in balance data
-    const filteredBalanceData = appState.balanceData.filter(item =>
-      searchInObject(item, query)
-    );
+    // Optimized search with early termination when we reach max results
+    let totalMatches = 0;
+    const filteredBalanceData: AccountBalance[] = [];
+    const filteredPositionsData: AccountPosition[] = [];
 
-    // Search in positions data
-    const filteredPositionsData = appState.positionsData.filter(item =>
-      searchInObject(item, query)
-    );
+    // Search in balance data first (with result limiting)
+    for (let i = 0; i < appState.balanceData.length && totalMatches < MAX_SEARCH_RESULTS; i++) {
+      const item = appState.balanceData[i];
+      if (searchInObject(item, query)) {
+        filteredBalanceData.push(item);
+        totalMatches++;
+      }
+    }
+
+    // Search in positions data (with result limiting)
+    for (let i = 0; i < appState.positionsData.length && totalMatches < MAX_SEARCH_RESULTS; i++) {
+      const item = appState.positionsData[i];
+      if (searchInObject(item, query)) {
+        filteredPositionsData.push(item);
+        totalMatches++;
+      }
+    }
+
+    // Calculate total possible results (including those beyond the limit)
+    const actualTotalResults = totalMatches >= MAX_SEARCH_RESULTS
+      ? MAX_SEARCH_RESULTS
+      : filteredBalanceData.length + filteredPositionsData.length;
 
     const results = {
       balanceData: filteredBalanceData,
       positionsData: filteredPositionsData,
-      totalResults: filteredBalanceData.length + filteredPositionsData.length,
+      totalResults: actualTotalResults,
     };
 
     // Calculate execution time and add to persistent history
@@ -396,11 +441,15 @@ export const SearchProvider: React.FC<SearchProviderProps> = ({ children }) => {
       source
     );
 
-    // Simulate search delay for better UX
-    setTimeout(() => {
-      dispatch({ type: 'SET_GLOBAL_RESULTS', payload: results });
-    }, Math.max(100 - executionTime, 10)); // Minimum delay, adjusted for actual execution time
-  }, [appState.balanceData, appState.positionsData, searchInObject, state.activeFilters]);
+    // Update results immediately for better perceived performance
+    dispatch({ type: 'SET_GLOBAL_RESULTS', payload: results });
+    dispatch({ type: 'SET_SEARCHING', payload: false });
+
+    // Log performance for debugging
+    if (executionTime > 100) {
+      console.warn(`Search took ${executionTime.toFixed(2)}ms for ${totalMatches} results`);
+    }
+  }, [appState.balanceData, appState.positionsData, searchInObject, state.activeFilters, MAX_SEARCH_RESULTS]);
 
   // Filter implementation
   const applyFilters = useCallback((filters: FilterCondition[]) => {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Upload,
   BarChart3,
@@ -18,13 +18,16 @@ import {
   UserCircle,
   ChevronLeft,
   ChevronRight,
-  LogOut
+  LogOut,
+  Menu,
+  X
 } from 'lucide-react';
 import { PageType, NavigationItem, AppState } from '../types/NavigationTypes';
 import { APP_CONFIG } from '../config/constants';
 import UndoRedoControls from './UndoRedoControls';
 import { useAuth } from '../contexts/AuthContext';
 import UserProfileModal from './UserProfileModal';
+import './Navigation.css';
 
 interface NavigationProps {
   currentPage: PageType;
@@ -38,8 +41,42 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const { user, userProfile, signOut, refreshProfile } = useAuth();
   const isCollapsed = externalCollapsed !== undefined ? externalCollapsed : internalCollapsed;
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Close mobile menu when page changes
+  useEffect(() => {
+    if (isMobile) {
+      setIsMobileMenuOpen(false);
+    }
+  }, [currentPage, isMobile]);
+
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (isMobile && isMobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMobile, isMobileMenuOpen]);
 
   const handleToggle = () => {
     const newCollapsed = !isCollapsed;
@@ -47,6 +84,17 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
       onToggleCollapse(newCollapsed);
     } else {
       setInternalCollapsed(newCollapsed);
+    }
+  };
+
+  const handleMobileMenuToggle = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  const handleNavItemClick = (pageId: PageType) => {
+    onPageChange(pageId);
+    if (isMobile) {
+      setIsMobileMenuOpen(false);
     }
   };
   const getIcon = (iconName: string, size = 20) => {
@@ -202,28 +250,42 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
       icon: 'users',
       requiresData: 'none',
     },
+    {
+      id: PageType.AUDIT_LOGS,
+      title: 'Audit Logs',
+      description: 'Activity logs',
+      icon: 'filetext',
+      requiresData: 'none',
+    },
   ];
 
   return (
-    <nav style={{
-      backgroundColor: 'white',
-      borderRight: '1px solid #e0e0e0',
-      minHeight: '100vh',
-      height: '100vh',
-      width: isCollapsed ? '80px' : '280px',
-      position: 'fixed',
-      left: 0,
-      top: 0,
-      zIndex: 90,
-      transition: 'width 0.3s ease',
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-    }}>
+    <>
+      {/* Mobile Hamburger Button */}
+      {isMobile && (
+        <button
+          className="mobile-menu-button"
+          onClick={handleMobileMenuToggle}
+          aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
+        >
+          {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+      )}
+
+      {/* Mobile Overlay */}
+      {isMobile && (
+        <div
+          className={`mobile-overlay ${isMobileMenuOpen ? 'visible' : ''}`}
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Navigation Sidebar */}
+      <nav className={`navigation-container ${isMobile ? (isMobileMenuOpen ? 'mobile-open' : '') : 'desktop'} ${!isMobile && isCollapsed ? 'collapsed' : ''}`}>
       {/* App Header */}
       <div style={{
         padding: isCollapsed ? '28px 8px 28px 8px' : '28px 20px 28px 20px',
-        borderBottom: '1px solid #f0f0f0',
+        borderBottom: '1px solid var(--border-primary)',
         display: 'flex',
         flexDirection: isCollapsed ? 'column' : 'row',
         alignItems: 'center',
@@ -241,7 +303,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
             <h1 style={{
               fontSize: '28px',
               fontWeight: 'bold',
-              color: '#333',
+              color: 'var(--text-primary)',
               margin: 0,
             }}>
               {APP_CONFIG.APP_NAME}
@@ -249,8 +311,9 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
           )}
         </div>
 
-        {/* Toggle Button */}
+        {/* Toggle Button - Hidden on mobile */}
         <button
+          className="desktop-toggle-button"
           onClick={handleToggle}
           style={{
             width: '36px',
@@ -290,8 +353,8 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
       }}>
         {navigationItems
           .filter(item => {
-            // Hide User Management for non-admins
-            if (item.id === PageType.USER_MANAGEMENT) {
+            // Hide User Management and Audit Logs for non-admins
+            if (item.id === PageType.USER_MANAGEMENT || item.id === PageType.AUDIT_LOGS) {
               return userProfile?.role === 'admin';
             }
             return true;
@@ -303,7 +366,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
           return (
             <div key={item.id} style={{ padding: isCollapsed ? '0 12px' : '0 20px', marginBottom: '4px' }}>
               <button
-                onClick={() => onPageChange(item.id)}
+                onClick={() => handleNavItemClick(item.id)}
                 disabled={!isEnabled}
                 style={{
                   display: 'flex',
@@ -311,8 +374,8 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
                   justifyContent: isCollapsed ? 'center' : 'space-between',
                   width: '100%',
                   padding: isCollapsed ? '10px 8px' : '10px 12px',
-                  backgroundColor: isActive ? '#2196f3' : 'transparent',
-                  color: isActive ? 'white' : isEnabled ? '#333' : '#ccc',
+                  backgroundColor: isActive ? 'var(--color-primary)' : 'transparent',
+                  color: isActive ? 'white' : isEnabled ? 'var(--text-primary)' : 'var(--text-tertiary)',
                   border: 'none',
                   borderRadius: '8px',
                   cursor: isEnabled ? 'pointer' : 'not-allowed',
@@ -325,7 +388,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
                 }}
                 onMouseEnter={(e) => {
                   if (isEnabled && !isActive) {
-                    e.currentTarget.style.backgroundColor = '#f5f5f5';
+                    e.currentTarget.style.backgroundColor = 'var(--bg-hover)';
                   }
                 }}
                 onMouseLeave={(e) => {
@@ -399,10 +462,10 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
       {!isCollapsed && (
         <div style={{
           padding: '12px 20px 8px 20px',
-          borderTop: '1px solid #f0f0f0',
+          borderTop: '1px solid var(--border-primary)',
           flexShrink: 0,
         }}>
-          <div style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
             <strong>Data Status</strong>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -452,7 +515,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
       {user && (
         <div style={{
           padding: isCollapsed ? '8px 12px' : '8px 20px',
-          borderTop: '1px solid #f0f0f0',
+          borderTop: '1px solid var(--border-primary)',
           flexShrink: 0,
           position: 'relative'
         }}>
@@ -470,7 +533,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
               cursor: 'pointer',
               transition: 'background-color 0.2s',
             }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'}
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
             title={isCollapsed ? user.email || 'User menu' : undefined}
           >
@@ -491,10 +554,10 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
             </div>
             {!isCollapsed && (
               <div style={{ flex: 1, textAlign: 'left', overflow: 'hidden' }}>
-                <div style={{ fontSize: '13px', fontWeight: '600', color: '#333', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {user.user_metadata?.full_name || user.email?.split('@')[0]}
                 </div>
-                <div style={{ fontSize: '11px', color: '#999', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {user.email}
                 </div>
               </div>
@@ -520,10 +583,10 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
                 bottom: '70px',
                 left: '20px',
                 right: '20px',
-                backgroundColor: 'white',
+                backgroundColor: 'var(--bg-primary)',
                 borderRadius: '8px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                border: '1px solid #e0e0e0',
+                boxShadow: 'var(--shadow-lg)',
+                border: '1px solid var(--border-primary)',
                 zIndex: 99
               }}>
                 {/* Profile Menu Item */}
@@ -540,14 +603,14 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
                     padding: '12px 16px',
                     backgroundColor: 'transparent',
                     border: 'none',
-                    borderBottom: '1px solid #f0f0f0',
+                    borderBottom: '1px solid var(--border-primary)',
                     cursor: 'pointer',
                     fontSize: '14px',
-                    color: '#333',
+                    color: 'var(--text-primary)',
                     fontWeight: '500',
                     transition: 'background-color 0.2s'
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'}
                   onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                 >
                   <UserCircle size={18} />
@@ -594,9 +657,9 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
       {!isCollapsed && (
         <div style={{
           padding: '10px 20px',
-          borderTop: '1px solid #f0f0f0',
+          borderTop: '1px solid var(--border-primary)',
           fontSize: '10px',
-          color: '#999',
+          color: 'var(--text-tertiary)',
           textAlign: 'center',
         }}>
           {APP_CONFIG.APP_VERSION}
@@ -610,6 +673,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
         onSave={refreshProfile}
       />
     </nav>
+    </>
   );
 };
 

@@ -18,7 +18,8 @@ export enum PageType {
   FEE_REPORTS = 'fee-reports',
   SETTINGS = 'settings',
   FIRM_SETTINGS = 'firm-settings',
-  USER_MANAGEMENT = 'user-management'
+  USER_MANAGEMENT = 'user-management',
+  AUDIT_LOGS = 'audit-logs'
 }
 
 export interface NavigationItem {

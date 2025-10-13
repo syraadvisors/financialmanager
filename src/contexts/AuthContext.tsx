@@ -195,8 +195,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSessionExpiresAt(null);
     }
 
-    // Redirect to login page
-    if (reason !== 'manual' && typeof window !== 'undefined') {
+    // Redirect to home page
+    if (typeof window !== 'undefined') {
       window.location.href = '/';
     }
   };

@@ -1,16 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
+import { getEnvironmentConfig } from '../utils/envValidation';
 
-// Get environment variables
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+// Get and validate environment configuration
+// This will throw an error if required variables are missing or invalid
+const envConfig = getEnvironmentConfig();
 
-// Validate environment variables
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    'Missing Supabase environment variables. ' +
-    'Please create a .env.local file with REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY'
-  );
-}
+const supabaseUrl = envConfig.supabaseUrl;
+const supabaseAnonKey = envConfig.supabaseAnonKey;
 
 // Create Supabase client
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {

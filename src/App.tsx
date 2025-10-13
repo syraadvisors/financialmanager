@@ -1,11 +1,14 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import './App.css';
+import './App.responsive.css';
 import './styles/searchHighlighting.css';
 import { PageType } from './types/NavigationTypes';
 import { AppProvider, useAppContext } from './contexts/AppContext';
 import { SearchProvider } from './contexts/SearchContext';
 import { FirmProvider } from './contexts/FirmContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import Navigation from './components/Navigation';
 import LoadingSkeleton from './components/LoadingSkeleton';
 import LoginPage from './components/LoginPage';
@@ -73,6 +76,11 @@ const FirmSettingsPage = createLazyComponent(
 const UserManagementPage = createLazyComponent(
   () => import('./components/UserManagementPage'),
   'UserManagementPage'
+);
+
+const AuditLogsPage = createLazyComponent(
+  () => import('./pages/AuditLogsPage'),
+  'AuditLogsPage'
 );
 
 // Lazy load heavy components that are conditionally rendered
@@ -199,6 +207,8 @@ const AppContent: React.FC = () => {
         return <FirmSettingsPage />;
       case PageType.USER_MANAGEMENT:
         return <UserManagementPage />;
+      case PageType.AUDIT_LOGS:
+        return <AuditLogsPage />;
       case PageType.OVERVIEW:
       default:
         return (
@@ -213,7 +223,7 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--bg-primary)' }}>
       {/* Navigation Sidebar */}
       <Navigation
         currentPage={state.currentPage}
@@ -224,20 +234,9 @@ const AppContent: React.FC = () => {
       />
 
       {/* Main Content */}
-      <div style={{
-        marginLeft: isNavCollapsed ? '80px' : '280px',
-        flex: 1,
-        transition: 'margin-left 0.3s ease'
-      }}>
+      <div className={`app-main-content ${isNavCollapsed ? 'collapsed' : ''}`}>
         {/* Global Search Bar */}
-        <div style={{
-          padding: '16px 24px',
-          backgroundColor: 'white',
-          borderBottom: '1px solid #e0e0e0',
-          position: 'sticky',
-          top: 0,
-          zIndex: 100,
-        }}>
+        <div className="app-search-bar">
           <Suspense fallback={<div style={{ height: '40px', backgroundColor: '#f5f5f5', borderRadius: '8px' }} />}>
             <GlobalSearch
               placeholder="Search accounts, positions, symbols... (Ctrl+F to focus)"
@@ -288,6 +287,43 @@ const AppContent: React.FC = () => {
       <Suspense fallback={null}>
         <SessionExpiryNotification />
       </Suspense>
+
+      {/* Toast Notifications */}
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#fff',
+            color: '#333',
+            fontSize: '14px',
+            fontWeight: '500',
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            padding: '12px 16px',
+          },
+          success: {
+            duration: 3000,
+            iconTheme: {
+              primary: '#4caf50',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            duration: 5000,
+            iconTheme: {
+              primary: '#f44336',
+              secondary: '#fff',
+            },
+          },
+          loading: {
+            iconTheme: {
+              primary: '#2196f3',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
     </div>
   );
 };
@@ -318,13 +354,15 @@ const App: React.FC = () => {
         path="/app/*"
         element={
           <ProtectedRoute>
-            <AppProvider enablePersistence={true}>
-              <FirmProvider defaultFirmId={TEMP_FALLBACK_FIRM_ID}>
-                <SearchProvider>
-                  <AppContent />
-                </SearchProvider>
-              </FirmProvider>
-            </AppProvider>
+            <ThemeProvider>
+              <AppProvider enablePersistence={true}>
+                <FirmProvider defaultFirmId={TEMP_FALLBACK_FIRM_ID}>
+                  <SearchProvider>
+                    <AppContent />
+                  </SearchProvider>
+                </FirmProvider>
+              </AppProvider>
+            </ThemeProvider>
           </ProtectedRoute>
         }
       />

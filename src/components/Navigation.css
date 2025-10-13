@@ -1,0 +1,118 @@
+/* Navigation Component Styles */
+
+.navigation-container {
+  background-color: var(--bg-secondary);
+  border-right: 1px solid var(--border-primary);
+  min-height: 100vh;
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 90;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Desktop - Normal width */
+.navigation-container.desktop {
+  width: 280px;
+}
+
+.navigation-container.desktop.collapsed {
+  width: 80px;
+}
+
+/* Mobile - Hidden by default, overlay when open */
+@media (max-width: 768px) {
+  .navigation-container {
+    width: 280px;
+    transform: translateX(-100%);
+    z-index: 1000;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+  }
+
+  .navigation-container.mobile-open {
+    transform: translateX(0);
+  }
+}
+
+/* Mobile Overlay - dark backdrop when menu is open */
+.mobile-overlay {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-overlay {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .mobile-overlay.visible {
+    opacity: 1;
+    pointer-events: all;
+  }
+}
+
+/* Mobile Hamburger Button */
+.mobile-menu-button {
+  display: none;
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 1001;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+  border: none;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
+  color: white;
+}
+
+.mobile-menu-button:hover {
+  background-color: var(--color-primary-hover);
+  transform: scale(1.05);
+}
+
+.mobile-menu-button:active {
+  transform: scale(0.95);
+}
+
+@media (max-width: 768px) {
+  .mobile-menu-button {
+    display: flex;
+  }
+}
+
+/* Tablet - Smaller collapsed width */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .navigation-container.desktop {
+    width: 240px;
+  }
+
+  .navigation-container.desktop.collapsed {
+    width: 70px;
+  }
+}
+
+/* Hide desktop toggle button on mobile */
+@media (max-width: 768px) {
+  .desktop-toggle-button {
+    display: none !important;
+  }
+}

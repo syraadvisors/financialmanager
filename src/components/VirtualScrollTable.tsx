@@ -1,6 +1,7 @@
 import React, { useMemo, useCallback, useRef } from 'react';
 import { List } from 'react-window';
 import { SortAsc, SortDesc } from 'lucide-react';
+import LoadingSkeleton from './LoadingSkeleton';
 
 export interface VirtualTableColumn<T = any> {
   key: keyof T;
@@ -134,33 +135,7 @@ const VirtualScrollTable = <T extends any>({
 
   // Loading state
   if (loading) {
-    return (
-      <div
-        className={className}
-        style={{
-          height,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: '#fafafa',
-          border: '1px solid #e0e0e0',
-          borderRadius: '8px',
-        }}
-      >
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            border: '4px solid #f3f3f3',
-            borderTop: '4px solid #2196f3',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            margin: '0 auto 16px'
-          }} />
-          <p style={{ color: '#666', fontSize: '14px' }}>Loading data...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSkeleton type="table" count={8} />;
   }
 
   // Empty state

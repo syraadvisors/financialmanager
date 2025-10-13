@@ -218,21 +218,42 @@ export const useFinancialAppShortcuts = () => {
 export const useShortcutHelp = () => {
   const { shortcuts } = useFinancialAppShortcuts();
 
-  const shortcutCategories = {
-    search: [
-      { key: 'Ctrl+F', description: 'Focus global search' },
-      { key: 'Ctrl+K', description: 'Open command palette' },
-      { key: 'Esc', description: 'Clear search and close modals' }
-    ],
-    navigation: [
-      { key: 'Ctrl+Shift+R', description: 'Clear all filters' },
-      { key: 'Ctrl+Shift+E', description: 'Export current view' }
-    ],
-    development: [
-      { key: 'Ctrl+Shift+P', description: 'Toggle performance dashboard' },
-      { key: 'Ctrl+Shift+M', description: 'Toggle search monitor' }
-    ]
+  // Dynamically categorize shortcuts based on their descriptions
+  const categorizeShortcuts = () => {
+    const categories: {
+      search: Array<{ key: string; description: string }>;
+      navigation: Array<{ key: string; description: string }>;
+      development: Array<{ key: string; description: string }>;
+      general: Array<{ key: string; description: string }>;
+    } = {
+      search: [],
+      navigation: [],
+      development: [],
+      general: []
+    };
+
+    shortcuts.forEach((shortcut) => {
+      const formattedKey = formatShortcutDisplay(shortcut);
+      const entry = { key: formattedKey, description: shortcut.description };
+
+      // Categorize based on description keywords
+      const desc = shortcut.description.toLowerCase();
+
+      if (desc.includes('search') || desc.includes('command') || desc.includes('filter')) {
+        categories.search.push(entry);
+      } else if (desc.includes('performance') || desc.includes('monitor') || desc.includes('dashboard')) {
+        categories.development.push(entry);
+      } else if (desc.includes('export') || desc.includes('clear')) {
+        categories.navigation.push(entry);
+      } else {
+        categories.general.push(entry);
+      }
+    });
+
+    return categories;
   };
+
+  const shortcutCategories = categorizeShortcuts();
 
   return {
     shortcuts,

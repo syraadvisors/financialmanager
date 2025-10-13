@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { X, User, Mail, Phone, Briefcase, Building2, Save, Shield, Bell, Globe, Clock } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, User, Mail, Phone, Briefcase, Building2, Save, Shield, Bell, Globe, Clock, Camera, Upload } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { UserProfile, UserProfileFormData, UserPreferencesFormData } from '../types/User';
 import { usersService } from '../services/api/users.service';
-import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -13,11 +14,13 @@ interface UserProfileModalProps {
 type TabType = 'profile' | 'preferences' | 'security';
 
 const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, onSave }) => {
+  const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<TabType>('profile');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileForm, setProfileForm] = useState<UserProfileFormData>({
@@ -44,7 +47,6 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, on
 
   const loadProfile = async () => {
     setLoading(true);
-    setError(null);
 
     console.log('Loading user profile...');
     const response = await usersService.getCurrentUserProfile();
@@ -52,7 +54,7 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, on
 
     if (response.error) {
       console.error('Profile load error:', response.error);
-      setError(`Failed to load profile: ${response.error}`);
+      toast.error(`Failed to load profile: ${response.error}`);
       setLoading(false);
       return;
     }
@@ -60,6 +62,7 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, on
     if (response.data) {
       console.log('Profile data loaded:', response.data);
       setProfile(response.data);
+      setAvatarPreview(response.data.avatarUrl || null);
       setProfileForm({
         fullName: response.data.fullName || '',
         jobTitle: response.data.jobTitle || '',
@@ -80,7 +83,7 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, on
       }
     } else {
       console.error('No profile data returned');
-      setError('Profile not found. Please contact your administrator.');
+      toast.error('Profile not found. Please contact your administrator.');
     }
 
     setLoading(false);
@@ -88,38 +91,103 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, on
 
   const handleSaveProfile = async () => {
     setSaving(true);
-    setError(null);
-    setSuccessMessage(null);
+    const loadingToast = toast.loading('Updating profile...');
 
     const response = await usersService.updateProfile(profileForm);
 
     if (response.error) {
-      setError(response.error);
+      toast.error(response.error, { id: loadingToast });
+      setSaving(false);
     } else {
-      setSuccessMessage('Profile updated successfully!');
+      toast.success('Profile updated successfully!', { id: loadingToast });
+      setSaving(false);
       if (onSave) onSave();
-      setTimeout(() => setSuccessMessage(null), 3000);
+      onClose(); // Close modal after successful save
     }
-
-    setSaving(false);
   };
 
   const handleSavePreferences = async () => {
     setSaving(true);
-    setError(null);
-    setSuccessMessage(null);
+    const loadingToast = toast.loading('Updating preferences...');
 
     const response = await usersService.updatePreferences(preferencesForm);
 
     if (response.error) {
-      setError(response.error);
+      toast.error(response.error, { id: loadingToast });
+      setSaving(false);
     } else {
-      setSuccessMessage('Preferences updated successfully!');
+      // Update the theme in the ThemeContext when preferences are saved
+      if (preferencesForm.theme) {
+        setTheme(preferencesForm.theme as 'light' | 'dark');
+      }
+      toast.success('Preferences updated successfully!', { id: loadingToast });
+      setSaving(false);
       if (onSave) onSave();
-      setTimeout(() => setSuccessMessage(null), 3000);
+      onClose(); // Close modal after successful save
+    }
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      toast.error('Please select a valid image file (JPEG, PNG, GIF, or WebP)');
+      return;
     }
 
-    setSaving(false);
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+    if (file.size > maxSize) {
+      toast.error('Image size must be less than 5MB');
+      return;
+    }
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAvatarPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // Upload the file
+    handleUploadAvatar(file);
+  };
+
+  const handleUploadAvatar = async (file: File) => {
+    setUploading(true);
+    const loadingToast = toast.loading('Uploading avatar...');
+
+    const response = await usersService.uploadAvatar(file);
+
+    if (response.error) {
+      toast.error(response.error, { id: loadingToast });
+      // Reset preview on error
+      setAvatarPreview(profile?.avatarUrl || null);
+    } else if (response.data) {
+      toast.success('Avatar updated successfully!', { id: loadingToast });
+      setProfile(prev => prev ? { ...prev, avatarUrl: response.data!.avatarUrl } : null);
+      if (onSave) onSave();
+    }
+
+    setUploading(false);
+  };
+
+  const handleRemoveAvatar = async () => {
+    const loadingToast = toast.loading('Removing avatar...');
+
+    const response = await usersService.removeAvatar();
+
+    if (response.error) {
+      toast.error(response.error, { id: loadingToast });
+    } else {
+      toast.success('Avatar removed successfully!', { id: loadingToast });
+      setAvatarPreview(null);
+      setProfile(prev => prev ? { ...prev, avatarUrl: null } : null);
+      if (onSave) onSave();
+    }
   };
 
   if (!isOpen) return null;
@@ -133,10 +201,11 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, on
       bottom: 0,
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
       display: 'flex',
-      alignItems: 'center',
+      alignItems: 'flex-start',
       justifyContent: 'center',
       zIndex: 1000,
-      padding: '20px'
+      padding: '120px 20px 20px 20px',
+      overflowY: 'auto'
     }}>
       <div style={{
         backgroundColor: 'white',
@@ -248,35 +317,140 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, on
             <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
               Loading profile...
             </div>
-          ) : error ? (
-            <div style={{
-              padding: '12px',
-              backgroundColor: '#fee2e2',
-              border: '1px solid #fecaca',
-              borderRadius: '8px',
-              color: '#991b1b',
-              fontSize: '14px'
-            }}>
-              {error}
-            </div>
           ) : (
             <>
-              {successMessage && (
-                <div style={{
-                  padding: '12px',
-                  backgroundColor: '#d1fae5',
-                  border: '1px solid #a7f3d0',
-                  borderRadius: '8px',
-                  color: '#065f46',
-                  fontSize: '14px',
-                  marginBottom: '16px'
-                }}>
-                  {successMessage}
-                </div>
-              )}
-
               {activeTab === 'profile' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {/* Profile Picture Upload */}
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '16px',
+                    padding: '20px',
+                    backgroundColor: '#f9fafb',
+                    borderRadius: '12px',
+                    border: '2px dashed #d1d5db'
+                  }}>
+                    <div style={{ position: 'relative' }}>
+                      {avatarPreview ? (
+                        <img
+                          src={avatarPreview}
+                          alt="Profile"
+                          style={{
+                            width: '120px',
+                            height: '120px',
+                            borderRadius: '50%',
+                            objectFit: 'cover',
+                            border: '4px solid white',
+                            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+                          }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: '120px',
+                          height: '120px',
+                          borderRadius: '50%',
+                          backgroundColor: '#2196f3',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'white',
+                          fontSize: '48px',
+                          fontWeight: 'bold',
+                          border: '4px solid white',
+                          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+                        }}>
+                          {profile?.email?.charAt(0).toUpperCase() || 'U'}
+                        </div>
+                      )}
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        style={{
+                          position: 'absolute',
+                          bottom: '0',
+                          right: '0',
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '50%',
+                          backgroundColor: uploading ? '#93c5fd' : '#2196f3',
+                          border: '3px solid white',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: uploading ? 'not-allowed' : 'pointer',
+                          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+                        }}
+                      >
+                        {uploading ? (
+                          <div style={{
+                            width: '16px',
+                            height: '16px',
+                            border: '2px solid white',
+                            borderTopColor: 'transparent',
+                            borderRadius: '50%',
+                            animation: 'spin 0.6s linear infinite'
+                          }} />
+                        ) : (
+                          <Camera size={20} color="white" />
+                        )}
+                      </button>
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                      onChange={handleFileSelect}
+                      style={{ display: 'none' }}
+                    />
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={uploading}
+                          style={{
+                            padding: '8px 16px',
+                            backgroundColor: uploading ? '#e5e7eb' : '#2196f3',
+                            color: uploading ? '#9ca3af' : 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            fontWeight: '600',
+                            cursor: uploading ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          <Upload size={14} />
+                          {uploading ? 'Uploading...' : 'Upload Photo'}
+                        </button>
+                        {avatarPreview && (
+                          <button
+                            onClick={handleRemoveAvatar}
+                            disabled={uploading}
+                            style={{
+                              padding: '8px 16px',
+                              backgroundColor: 'white',
+                              color: '#dc2626',
+                              border: '1px solid #fecaca',
+                              borderRadius: '6px',
+                              fontSize: '13px',
+                              fontWeight: '600',
+                              cursor: uploading ? 'not-allowed' : 'pointer'
+                            }}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      <p style={{ fontSize: '12px', color: '#6b7280', margin: '8px 0 0 0' }}>
+                        JPG, PNG, GIF or WebP. Max 5MB.
+                      </p>
+                    </div>
+                  </div>
+
                   {/* Role Badge */}
                   <div style={{
                     padding: '12px',
@@ -463,7 +637,12 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, on
                     </label>
                     <select
                       value={preferencesForm.theme}
-                      onChange={(e) => setPreferencesForm({ ...preferencesForm, theme: e.target.value as 'light' | 'dark' })}
+                      onChange={(e) => {
+                        const newTheme = e.target.value as 'light' | 'dark';
+                        setPreferencesForm({ ...preferencesForm, theme: newTheme });
+                        // Apply theme immediately for preview (won't persist until saved)
+                        setTheme(newTheme);
+                      }}
                       style={{
                         width: '100%',
                         padding: '10px 12px',
@@ -476,6 +655,9 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, on
                       <option value="light">Light</option>
                       <option value="dark">Dark</option>
                     </select>
+                    <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
+                      Theme changes apply immediately. Click "Save Changes" to persist your preference.
+                    </p>
                   </div>
 
                   {/* Timezone */}
@@ -716,7 +898,7 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, on
         </div>
 
         {/* Footer with Save Button */}
-        {!loading && !error && (activeTab === 'profile' || activeTab === 'preferences') && (
+        {!loading && (activeTab === 'profile' || activeTab === 'preferences') && (
           <div style={{
             padding: '16px 24px',
             borderTop: '1px solid #e5e7eb',
