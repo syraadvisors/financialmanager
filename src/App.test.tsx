@@ -52,6 +52,7 @@ jest.mock('react-hot-toast', () => ({
   Toaster: () => null,
 }));
 
+// eslint-disable-next-line import/first
 import App from './App';
 
 describe('App', () => {
