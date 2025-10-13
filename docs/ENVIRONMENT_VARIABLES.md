@@ -93,7 +93,7 @@ REACT_APP_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXB
 
 **Example:**
 ```env
-REACT_APP_GOOGLE_MAPS_API_KEY=AIzaSyA1234567890abcdefghijklmnopqrstuv
+REACT_APP_GOOGLE_MAPS_API_KEY=your-google-maps-api-key-here
 ```
 
 **Without this variable:**
