@@ -7,8 +7,8 @@ import { CsvImportErrorFallback } from '../components/ErrorFallbacks';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import { APP_CONFIG } from '../config/constants';
 
-// Lazy load the CsvImporter component for better code splitting
-const CsvImporter = lazy(() => import('../components/CsvImporter'));
+// Lazy load the CSVImporter component for better code splitting
+const CSVImporter = lazy(() => import('../components/CSVImporter'));
 
 interface ImportPageProps {
   onDataImported: (data: any[], fileType: FileType, summary: any) => void;
@@ -244,7 +244,7 @@ const ImportPage: React.FC<ImportPageProps> = ({ onDataImported }) => {
           }
         >
           <Suspense fallback={<LoadingSkeleton type="card" />}>
-            <CsvImporter onDataImported={onDataImported} />
+            <CSVImporter onDataImported={onDataImported} />
           </Suspense>
         </ErrorBoundary>
       </div>
