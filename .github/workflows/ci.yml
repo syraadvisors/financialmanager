@@ -28,7 +28,7 @@ jobs:
         run: npm run lint || echo "Linting completed with warnings"
 
       - name: Run unit tests
-        run: npm test -- --coverage --watchAll=false
+        run: npm run test:ci -- --coverage
 
       - name: Build application
         run: npm run build
