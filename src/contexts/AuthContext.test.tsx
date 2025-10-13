@@ -23,6 +23,7 @@ jest.mock('../services/api/users.service', () => ({
   },
 }));
 
+// eslint-disable-next-line import/first
 import { usersService } from '../services/api/users.service';
 
 describe('AuthContext', () => {

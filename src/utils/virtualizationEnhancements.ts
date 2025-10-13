@@ -309,47 +309,44 @@ export function useEnhancedVirtualization<T>(
     setScrollTop(event.currentTarget.scrollTop);
   }, []);
 
-  // Item renderer with height measurement
-  const renderItem = useCallback(
-    (
-      itemData: T,
-      index: number,
-      style: React.CSSProperties,
-      ref?: React.RefObject<HTMLDivElement>
-    ) => {
-      const itemRef = useRef<HTMLDivElement>(null);
-      const actualRef = ref || itemRef;
-
-      useEffect(() => {
-        if (dynamicHeight && actualRef.current && heightCalculatorRef.current) {
-          const element = actualRef.current;
-          const height = element.getBoundingClientRect().height;
-          heightCalculatorRef.current.setItemHeight(index, height);
-        }
-
-        if (enableIntersectionObserver && actualRef.current && visibilityTrackerRef.current) {
-          const element = actualRef.current;
-          visibilityTrackerRef.current.observe(element, index);
-
-          return () => {
-            visibilityTrackerRef.current?.unobserve(element);
-          };
-        }
-      }, [index]);
-
+  // Get style for an item (without hooks - this is not a component)
+  const getItemStyle = useCallback(
+    (index: number, baseStyle: React.CSSProperties) => {
       return {
-        ref: actualRef,
-        style: {
-          ...style,
-          position: 'absolute' as const,
-          top: dynamicHeight
-            ? heightCalculatorRef.current?.getTotalHeight(index) || index * itemHeight
-            : index * itemHeight,
-          width: '100%',
-        },
+        ...baseStyle,
+        position: 'absolute' as const,
+        top: dynamicHeight
+          ? heightCalculatorRef.current?.getTotalHeight(index) || index * itemHeight
+          : index * itemHeight,
+        width: '100%',
       };
     },
-    [dynamicHeight, enableIntersectionObserver, itemHeight]
+    [dynamicHeight, itemHeight]
+  );
+
+  // Measure item height (call this from component's useEffect)
+  const measureItemHeight = useCallback(
+    (element: HTMLElement, index: number) => {
+      if (dynamicHeight && heightCalculatorRef.current) {
+        const height = element.getBoundingClientRect().height;
+        heightCalculatorRef.current.setItemHeight(index, height);
+      }
+    },
+    [dynamicHeight]
+  );
+
+  // Track item visibility (call this from component's useEffect)
+  const trackItemVisibility = useCallback(
+    (element: HTMLElement, index: number) => {
+      if (enableIntersectionObserver && visibilityTrackerRef.current) {
+        visibilityTrackerRef.current.observe(element, index);
+        return () => {
+          visibilityTrackerRef.current?.unobserve(element);
+        };
+      }
+      return undefined;
+    },
+    [enableIntersectionObserver]
   );
 
   // Cleanup on unmount
@@ -367,7 +364,9 @@ export function useEnhancedVirtualization<T>(
     startIndex,
     endIndex,
     handleScroll,
-    renderItem,
+    getItemStyle,
+    measureItemHeight,
+    trackItemVisibility,
     setItemHeight: heightCalculatorRef.current?.setItemHeight.bind(heightCalculatorRef.current),
   };
 }
