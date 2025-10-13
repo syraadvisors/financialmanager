@@ -26,3 +26,6 @@ yarn-error.log*
 nul
 .env.local
 
+# Temporary verification/test files that may contain API keys
+verify-*.html
+test-*.html

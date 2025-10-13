@@ -1,5 +1,6 @@
 // Bundle optimization utilities for analyzing and improving bundle size
 import React, { lazy } from 'react';
+import { createLogger } from './logger';
 
 // Performance measurement utilities
 export interface BundleMetrics {
@@ -10,6 +11,9 @@ export interface BundleMetrics {
   unusedModules: string[];
   recommendations: string[];
 }
+
+// Create logger for bundle optimization
+const bundleLogger = createLogger('CodeSplitting');
 
 // Code splitting utility for dynamic imports
 export class CodeSplittingManager {
@@ -116,7 +120,7 @@ export function createLazyComponent(
       CodeSplittingManager.markChunkLoaded(chunkName);
       return await importFn();
     } catch (error) {
-      console.error(`Failed to load chunk ${chunkName}:`, error);
+      bundleLogger.error(`Failed to load chunk ${chunkName}`, error);
       throw error;
     }
   });
@@ -292,15 +296,17 @@ export const BundleMetricsDisplay: React.FC<{
 
 // Initialize optimization on app start
 export function initializeBundleOptimization(): void {
+  const logger = createLogger('BundleOptimization');
+
   // Initialize bundle monitoring
   BundleSizeMonitor.init();
 
   // Log initial metrics
   if (process.env.NODE_ENV === 'development') {
-    console.log('Bundle optimization initialized');
+    logger.info('Bundle optimization initialized');
     setTimeout(() => {
       const report = BundleSizeMonitor.generateReport();
-      console.log('Bundle metrics:', report);
+      logger.info('Bundle metrics', report);
     }, 2000);
   }
 }

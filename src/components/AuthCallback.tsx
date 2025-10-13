@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { usersService } from '../services/api/users.service';
 import LoadingSkeleton from './LoadingSkeleton';
+import { logAuthEvent } from '../utils/logger';
 
 const AuthCallback: React.FC = () => {
   const navigate = useNavigate();
@@ -53,7 +54,11 @@ const AuthCallback: React.FC = () => {
           // Log the login
           await usersService.logLogin();
 
-          console.log('User authenticated successfully for firm:', firmData.firm_name);
+          logAuthEvent('login', {
+            firmName: firmData.firm_name,
+            email: email,
+            userId: data.session.user.id
+          });
 
           // Redirect to dashboard
           navigate('/app');
@@ -61,7 +66,7 @@ const AuthCallback: React.FC = () => {
           throw new Error('No session found');
         }
       } catch (err: any) {
-        console.error('Auth callback error:', err);
+        logAuthEvent('auth-error', { error: err.message });
         const errorMessage = err.message || 'Authentication failed';
         setError(errorMessage);
         toast.error(errorMessage, { duration: 5000 });
