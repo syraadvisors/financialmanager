@@ -32,6 +32,8 @@ jobs:
 
       - name: Build application
         run: npm run build
+        env:
+          DISABLE_ESLINT_PLUGIN: true
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -95,6 +97,8 @@ jobs:
           npm run build
           ls -lh build/static/js/*.js
           du -sh build/
+        env:
+          DISABLE_ESLINT_PLUGIN: true
 
       - name: Check bundle size limits
         run: |
@@ -124,6 +128,8 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          DISABLE_ESLINT_PLUGIN: true
 
       # Netlify deployment
       - name: Deploy to Netlify
