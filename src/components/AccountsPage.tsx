@@ -305,7 +305,11 @@ const AccountsPage: React.FC = () => {
       },
     };
 
-    const style = config[status];
+    const style = config[status] || {
+      bg: '#f5f5f5',
+      color: '#666',
+      icon: <AlertTriangle size={14} />
+    };
 
     return (
       <span style={{
@@ -320,7 +324,7 @@ const AccountsPage: React.FC = () => {
         color: style.color
       }}>
         {style.icon}
-        {status}
+        {status || 'Unknown'}
       </span>
     );
   };

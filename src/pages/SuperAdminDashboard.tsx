@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Users,
   Building2,
@@ -18,7 +19,8 @@ import {
   Eye,
   Shield,
   Settings,
-  RefreshCw
+  RefreshCw,
+  ArrowLeft
 } from 'lucide-react';
 import { superAdminService } from '../services/api/superAdmin.service';
 import { UserProfile } from '../types/User';
@@ -39,6 +41,7 @@ interface SuperAdminStats {
 
 const SuperAdminDashboard: React.FC = () => {
   console.log('[SuperAdminDashboard] Component function called - about to initialize hooks');
+  const navigate = useNavigate();
   const [stats, setStats] = useState<SuperAdminStats | null>(null);
   const [firms, setFirms] = useState<FirmSettings[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -151,9 +154,37 @@ const SuperAdminDashboard: React.FC = () => {
     <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
       {/* Header */}
       <div style={{ marginBottom: '32px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-          <Shield size={32} style={{ color: '#dc2626' }} />
-          <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 700 }}>Super Admin Dashboard</h1>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Shield size={32} style={{ color: '#dc2626' }} />
+            <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 700 }}>Super Admin Dashboard</h1>
+          </div>
+          <button
+            onClick={() => navigate('/app')}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#2563eb',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#1d4ed8';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#2563eb';
+            }}
+          >
+            <ArrowLeft size={18} />
+            Back to App
+          </button>
         </div>
         <p style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>
           System-wide management and monitoring

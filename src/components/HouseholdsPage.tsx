@@ -152,7 +152,7 @@ const HouseholdsPage: React.FC = () => {
       [BillingAggregationLevel.RELATIONSHIP]: { bg: '#fff3e0', color: '#f57c00', label: 'Relationship' }
     };
 
-    const style = config[level];
+    const style = config[level] || { bg: '#f5f5f5', color: '#666', label: 'Unknown' };
     return (
       <span style={{
         padding: '4px 10px',
