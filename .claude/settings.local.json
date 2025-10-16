@@ -33,7 +33,9 @@
       "Bash(git commit -m \"$(cat <<''EOF''\nfix: mock react-router-dom before import to resolve module resolution issue\n\nThe App.test.tsx was failing in CI with \"Cannot find module 'react-router-dom'\"\neven though the package is installed. This is a Jest module resolution issue.\n\nSolution:\n1. Mock react-router-dom at the top of the file before any imports\n2. Use jest.requireActual to preserve actual exports where needed\n3. Mock the key components (BrowserRouter, Routes, Route, Navigate)\n4. Mock the hooks (useNavigate, useLocation)\n5. Import App after all mocks are set up\n\nThis ensures Jest properly resolves and mocks the module before attempting\nto load App.tsx which depends on react-router-dom.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(git commit:*)",
       "Bash(git rm:*)",
-      "Bash(git mv:*)"
+      "Bash(git mv:*)",
+      "Bash(if exist \"node_modules\\.cache\" rmdir /s /q \"node_modules\\.cache\")",
+      "Bash(if exist \"s:\\Software Development\\financial_manager\\node_modules\\.cache\" rmdir /s /q \"s:\\Software Development\\financial_manager\\node_modules\\.cache\")"
     ],
     "deny": [],
     "ask": []

@@ -72,7 +72,13 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
   },
 ];
 
+// Role information including super_admin
 const ROLE_INFO: Record<UserRole, { name: string; description: string; color: string }> = {
+  super_admin: {
+    name: 'Super Admin',
+    description: 'System-wide access across all firms with impersonation capabilities',
+    color: '#dc2626',
+  },
   admin: {
     name: 'Admin',
     description: 'Full access to all features and management capabilities',

@@ -5,8 +5,8 @@ import { getEnvironmentConfig } from '../utils/envValidation';
 // This will throw an error if required variables are missing or invalid
 const envConfig = getEnvironmentConfig();
 
-const supabaseUrl = envConfig.supabaseUrl;
-const supabaseAnonKey = envConfig.supabaseAnonKey;
+export const supabaseUrl = envConfig.supabaseUrl;
+export const supabaseAnonKey = envConfig.supabaseAnonKey;
 
 // Create Supabase client
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {

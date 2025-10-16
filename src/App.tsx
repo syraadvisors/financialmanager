@@ -9,16 +9,20 @@ import { AppProvider, useAppContext } from './contexts/AppContext';
 import { SearchProvider } from './contexts/SearchContext';
 import { FirmProvider } from './contexts/FirmContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { ImpersonationProvider } from './contexts/ImpersonationContext';
 import Navigation from './components/Navigation';
 import LoadingSkeleton from './components/LoadingSkeleton';
 import LoginPage from './components/LoginPage';
 import AuthCallback from './components/AuthCallback';
 import ProtectedRoute from './components/ProtectedRoute';
+import ImpersonationBanner from './components/ImpersonationBanner';
 import {
   createLazyComponent,
   initializeBundleOptimization
 } from './utils/bundleOptimization';
 import { useFinancialAppShortcuts } from './hooks/useKeyboardShortcuts';
+// Temporarily bypass lazy loading to debug
+import SuperAdminDashboardDirect from './pages/SuperAdminDashboard';
 
 // Import marketing pages
 import {
@@ -30,6 +34,9 @@ import {
   SupportPage,
   CompliancePage
 } from './public-pages/pages';
+
+// Debug logging for SuperAdminDashboard import
+console.log('[App] SuperAdminDashboardDirect imported:', SuperAdminDashboardDirect, typeof SuperAdminDashboardDirect);
 
 // Lazy load all page components with enhanced code splitting
 const OverviewPage = createLazyComponent(
@@ -82,6 +89,10 @@ const AuditLogsPage = createLazyComponent(
   () => import('./pages/AuditLogsPage'),
   'AuditLogsPage'
 );
+
+// Use the direct import (bypassing lazy loading as it was working)
+const SuperAdminDashboard = SuperAdminDashboardDirect;
+console.log('[App] SuperAdminDashboard component assigned:', SuperAdminDashboard, typeof SuperAdminDashboard);
 
 // Lazy load heavy components that are conditionally rendered
 const GlobalSearch = lazy(() => import('./components/GlobalSearch'));
@@ -224,6 +235,9 @@ const AppContent: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--bg-primary)' }}>
+      {/* Impersonation Banner - Fixed at top */}
+      <ImpersonationBanner />
+
       {/* Navigation Sidebar */}
       <Navigation
         currentPage={state.currentPage}
@@ -357,12 +371,26 @@ const App: React.FC = () => {
             <ThemeProvider>
               <AppProvider enablePersistence={true}>
                 <FirmProvider defaultFirmId={TEMP_FALLBACK_FIRM_ID}>
-                  <SearchProvider>
-                    <AppContent />
-                  </SearchProvider>
+                  <ImpersonationProvider>
+                    <SearchProvider>
+                      <AppContent />
+                    </SearchProvider>
+                  </ImpersonationProvider>
                 </FirmProvider>
               </AppProvider>
             </ThemeProvider>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Super Admin Dashboard Route */}
+      <Route
+        path="/super-admin"
+        element={
+          <ProtectedRoute>
+            <ImpersonationProvider>
+              <SuperAdminDashboard />
+            </ImpersonationProvider>
           </ProtectedRoute>
         }
       />

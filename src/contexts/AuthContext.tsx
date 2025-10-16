@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
 import { UserProfile, UserRole, PermissionName } from '../types/User';
-import { usersService } from '../services/api/users.service';
 
 interface AuthContextType {
   user: User | null;
@@ -28,20 +27,124 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
   const expiryWarningShownRef = useRef(false);
+  const sessionRef = useRef<Session | null>(null);
+
+  // Keep sessionRef updated
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
 
   const loadUserProfile = async (userId: string) => {
+    console.log('[AuthContext] loadUserProfile starting for userId:', userId);
     try {
-      const response = await usersService.getCurrentUserProfile();
-      if (response.data) {
-        setUserProfile(response.data);
-      } else if (response.error) {
-        console.warn('[AuthContext] User profile not found:', response.error);
+      console.log('[AuthContext] Fetching profile via direct REST API...');
+
+      // WORKAROUND: The Supabase JS client hangs on user_profiles queries for unknown reasons
+      // Even though the database query executes in <1ms in SQL Editor, the JS client hangs for 10s
+      // Solution: Bypass the Supabase JS client and use direct fetch to PostgREST API
+
+      // Use the session from ref to avoid hanging on supabase.auth.getSession()
+      const currentSession = sessionRef.current;
+
+      if (!currentSession) {
+        console.error('[AuthContext] No session found in ref');
         setUserProfile(null);
+        return;
+      }
+
+      console.log('[AuthContext] Making direct fetch request...');
+      const response = await fetch(
+        `${supabaseUrl}/rest/v1/user_profiles?id=eq.${userId}&select=*`,
+        {
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${currentSession.access_token}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          }
+        }
+      );
+
+      console.log('[AuthContext] Fetch response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[AuthContext] Fetch error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('[AuthContext] Fetch returned data:', data);
+
+      const profileData = Array.isArray(data) && data.length > 0 ? data[0] : null;
+
+      console.log('[AuthContext] Parsed profile data:', profileData);
+
+      if (!profileData) {
+        console.error('[AuthContext] No profile data returned');
+        setUserProfile(null);
+      } else {
+        console.log('[AuthContext] Setting userProfile:', profileData);
+        // Convert snake_case to camelCase and ensure Date objects
+        const profile: UserProfile = {
+          id: profileData.id,
+          firmId: profileData.firm_id,
+          email: profileData.email,
+          fullName: profileData.full_name,
+          role: profileData.role,
+          status: profileData.status,
+          avatarUrl: profileData.avatar_url,
+          jobTitle: profileData.job_title,
+          department: profileData.department,
+          phoneNumber: profileData.phone_number,
+          bio: profileData.bio,
+          emailVerified: profileData.email_verified,
+          mfaEnabled: profileData.mfa_enabled || false,
+          preferences: profileData.preferences,
+          lastLoginAt: profileData.last_login_at ? new Date(profileData.last_login_at) : null,
+          loginCount: profileData.login_count,
+          createdAt: new Date(profileData.created_at),
+          updatedAt: new Date(profileData.updated_at)
+        };
+        setUserProfile(profile);
       }
     } catch (error) {
-      console.error('[AuthContext] Error loading user profile:', error);
-      setUserProfile(null);
+      console.error('[AuthContext] Exception loading user profile:', error);
+      // On timeout or exception, try to set minimal profile from auth user
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          console.log('[AuthContext] Setting minimal profile from auth user after exception');
+          const minimalProfile: UserProfile = {
+            id: userId,
+            firmId: null,
+            email: user.email || '',
+            fullName: user.user_metadata?.full_name || user.email || '',
+            role: 'user' as UserRole,
+            status: 'active',
+            avatarUrl: user.user_metadata?.avatar_url || null,
+            jobTitle: null,
+            department: null,
+            phoneNumber: null,
+            bio: null,
+            emailVerified: user.email_confirmed_at ? true : false,
+            mfaEnabled: false,
+            preferences: null,
+            lastLoginAt: null,
+            loginCount: 0,
+            createdAt: user.created_at ? new Date(user.created_at) : new Date(),
+            updatedAt: user.updated_at ? new Date(user.updated_at) : new Date()
+          };
+          setUserProfile(minimalProfile);
+        } else {
+          setUserProfile(null);
+        }
+      } catch (fallbackError) {
+        console.error('[AuthContext] Fallback profile creation also failed:', fallbackError);
+        setUserProfile(null);
+      }
     }
+    console.log('[AuthContext] loadUserProfile completed');
   };
 
   // Setup automatic token refresh before expiry

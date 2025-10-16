@@ -215,8 +215,10 @@ const UserManagementPage: React.FC = () => {
     }
   };
 
+  // Get role badge styling - handles all UserRole types including super_admin
   const getRoleBadgeColor = (role: UserRole) => {
     switch (role) {
+      case 'super_admin': return { bg: '#fee2e2', color: '#991b1b', icon: Shield };
       case 'admin': return { bg: '#dbeafe', color: '#1e40af', icon: Crown };
       case 'user': return { bg: '#ddd6fe', color: '#5b21b6', icon: Users };
       case 'viewer': return { bg: '#e5e7eb', color: '#374151', icon: Eye };

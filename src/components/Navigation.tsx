@@ -351,11 +351,74 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
         padding: '12px 0',
         minHeight: 0  // Important for flexbox scrolling
       }}>
+        {/* Super Admin Dashboard Link - Only visible to super_admin */}
+        {userProfile?.role === 'super_admin' && (
+          <div style={{ padding: isCollapsed ? '0 12px' : '0 20px', marginBottom: '4px' }}>
+            <a
+              href="/super-admin"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: isCollapsed ? 'center' : 'space-between',
+                width: '100%',
+                padding: isCollapsed ? '10px 8px' : '10px 12px',
+                backgroundColor: '#dc2626',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                textAlign: 'left',
+                textDecoration: 'none',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#b91c1c';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#dc2626';
+              }}
+              title={isCollapsed ? 'Super Admin Dashboard' : ''}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, justifyContent: isCollapsed ? 'center' : 'flex-start' }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minWidth: '20px',
+                }}>
+                  {getIcon('settings', 18)}
+                </div>
+                {!isCollapsed && (
+                  <div>
+                    <div style={{
+                      fontSize: '13px',
+                      fontWeight: 'bold',
+                      lineHeight: 1.2,
+                    }}>
+                      Super Admin
+                    </div>
+                    <div style={{
+                      fontSize: '10px',
+                      opacity: 0.9,
+                      lineHeight: 1.2,
+                      marginTop: '1px',
+                    }}>
+                      System Dashboard
+                    </div>
+                  </div>
+                )}
+              </div>
+            </a>
+          </div>
+        )}
+
         {navigationItems
           .filter(item => {
             // Hide User Management and Audit Logs for non-admins
             if (item.id === PageType.USER_MANAGEMENT || item.id === PageType.AUDIT_LOGS) {
-              return userProfile?.role === 'admin';
+              return userProfile?.role === 'admin' || userProfile?.role === 'super_admin';
             }
             return true;
           })

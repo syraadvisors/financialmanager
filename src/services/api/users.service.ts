@@ -13,26 +13,42 @@ export const usersService = {
    */
   async getCurrentUserProfile(): Promise<ApiResponse<UserProfile>> {
     try {
+      console.log('[usersService] getCurrentUserProfile starting');
+      console.log('[usersService] About to call supabase.auth.getUser()');
       const { data: { user } } = await supabase.auth.getUser();
+      console.log('[usersService] Got user from auth:', user);
 
       if (!user) {
+        console.log('[usersService] No user authenticated');
         return { data: null, error: 'Not authenticated' };
       }
 
-      const { data, error } = await supabase
+      console.log('[usersService] Fetching profile for user:', user.id);
+
+      // Add timeout to prevent infinite hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Profile query timeout after 5 seconds')), 5000);
+      });
+
+      const queryPromise = supabase
         .from('user_profiles')
         .select('*')
         .eq('id', user.id)
         .single();
 
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any;
+
+      console.log('[usersService] Query completed - data:', data, 'error:', error);
+
       if (error) {
-        console.error('Error fetching user profile:', error);
+        console.error('[usersService] Error fetching user profile:', error);
         return { data: null, error: error.message };
       }
 
+      console.log('[usersService] Returning profile data');
       return { data: mapToCamelCase<UserProfile>(data), error: null };
     } catch (err: any) {
-      console.error('Error in getCurrentUserProfile:', err);
+      console.error('[usersService] Exception in getCurrentUserProfile:', err);
       return { data: null, error: err.message };
     }
   },
