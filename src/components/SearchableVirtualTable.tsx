@@ -1,8 +1,7 @@
 import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react';
 import { List } from 'react-window';
-import { SortAsc, SortDesc, Search, ChevronUp, ChevronDown, Navigation } from 'lucide-react';
+import { SortAsc, SortDesc, Search, Navigation } from 'lucide-react';
 import { useSearchContext } from '../contexts/SearchContext';
-import HighlightText from './HighlightText';
 import { HighlightedText } from '../utils/textHighlighting';
 import LoadingSkeleton from './LoadingSkeleton';
 import '../styles/searchHighlighting.css';
@@ -42,14 +41,156 @@ export interface SearchableTableProps<T = any> {
 interface RowData<T> {
   items: T[];
   columns: SearchableTableColumn<T>[];
-  onRowClick?: (row: T, index: number) => void;
   highlightTerm: string;
-  enableHighlighting: boolean;
   focusedRowIndex: number;
   selectedRowIndex: number;
-  searchMatches: Map<number, number>;
-  highlightIntensity: 'low' | 'medium' | 'high';
+  searchMatches: Record<number, number>; // Changed from Map to plain object for react-window compatibility
+  showSearchIndicator: boolean;
+  enableKeyboardNavigation: boolean;
+  // Note: All functions removed from this interface to ensure Object.values() compatibility
 }
+
+// Row renderer component - defined outside main component for stability
+const VirtualizedRow = React.memo(<T extends any>(props: {
+  index: number;
+  style: React.CSSProperties;
+  data?: RowData<T>;
+}) => {
+  const { index, style, data } = props;
+
+  // Safety check: if data is undefined, render empty row
+  if (!data) {
+    console.error('[SearchableVirtualTable] No data provided to VirtualizedRow');
+    return (
+      <div style={{ ...style, padding: '8px', color: '#999' }}>
+        No data
+      </div>
+    );
+  }
+
+  const {
+    items,
+    columns,
+    highlightTerm,
+    focusedRowIndex,
+    selectedRowIndex,
+    searchMatches,
+    showSearchIndicator,
+    enableKeyboardNavigation,
+  } = data;
+
+  // Safety check: if item is null/undefined, render empty row
+  if (!items || !items[index]) {
+    console.error('[SearchableVirtualTable] No item at index:', index);
+    return (
+      <div style={{ ...style, padding: '8px', color: '#999' }}>
+        Invalid data at row {index}
+      </div>
+    );
+  }
+
+  const item = items[index];
+
+  // Check if this row matches the current search
+  const matchCount = searchMatches[index] || 0;
+  const isMatch = matchCount > 0;
+  const isFocused = index === focusedRowIndex;
+  const isSelected = index === selectedRowIndex;
+
+  // Determine row background based on state
+  let backgroundColor;
+  if (isSelected) {
+    backgroundColor = '#1976d2';
+  } else if (isFocused) {
+    backgroundColor = '#e3f2fd';
+  } else if (isMatch) {
+    backgroundColor = index % 2 === 0 ? '#fff8e1' : '#fff3cd';
+  } else {
+    backgroundColor = index % 2 === 0 ? 'white' : '#fafafa';
+  }
+
+  // Get intensity class based on match count
+  const getIntensityClass = (count: number) => {
+    if (count >= 3) return 'search-match-intensity--high';
+    if (count >= 2) return 'search-match-intensity--medium';
+    return 'search-match-intensity--low';
+  };
+
+  return (
+    <div
+      className={`
+        ${isMatch ? 'table-row--highlighted' : ''}
+        ${isFocused ? 'search-result--focused' : ''}
+        ${isSelected ? 'search-result--selected' : ''}
+      `.trim()}
+      style={{
+        ...style,
+        display: 'flex',
+        alignItems: 'center',
+        borderBottom: '1px solid #e0e0e0',
+        backgroundColor,
+        cursor: 'default',
+        transition: 'all 0.2s ease',
+        position: 'relative',
+        color: isSelected ? 'white' : '#333',
+      }}
+    >
+      {/* Enhanced search match indicator */}
+      {showSearchIndicator && isMatch && (
+        <>
+          <div
+            className={`search-match-intensity ${getIntensityClass(matchCount)}`}
+          />
+          {matchCount > 1 && (
+            <div className="search-results-indicator">
+              {matchCount}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Navigation indicator for focused/selected rows */}
+      {(isFocused || isSelected) && enableKeyboardNavigation && (
+        <div className="search-navigation-indicator">
+          {isSelected ? '✓' : '▶'}
+        </div>
+      )}
+
+      {columns.map((column: SearchableTableColumn<T>, colIndex: number) => {
+        const value = item[column.key];
+        const displayValue = column.formatter ? column.formatter(value, item) : value;
+
+        // Check if this cell has matches
+        const cellHasMatch = highlightTerm && column.searchable !== false && value &&
+          value.toString().toLowerCase().includes(highlightTerm.toLowerCase());
+
+        return (
+          <div
+            key={`${column.key as string}-${colIndex}`}
+            className={cellHasMatch ? 'table-cell--has-match' : ''}
+            style={{
+              width: column.width,
+              padding: '8px 12px',
+              textAlign: column.align || 'left',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              fontSize: '14px',
+              color: isSelected ? 'white' : '#333',
+              paddingLeft: showSearchIndicator && colIndex === 0 ? '28px' : '12px',
+              position: 'relative',
+            }}
+            title={`${typeof value === 'string' ? value : String(value)}${
+              cellHasMatch ? ` (${matchCount} matches in row)` : ''
+            }`}
+          >
+            {displayValue as React.ReactNode}
+          </div>
+        );
+      })}
+    </div>
+  );
+}) as any; // Type cast to work with react-window's expectations
 
 const SearchableVirtualTable = <T extends any>({
   data,
@@ -79,6 +220,20 @@ const SearchableVirtualTable = <T extends any>({
   const [searchMatches, setSearchMatches] = useState<Map<number, number>>(new Map());
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const [totalMatches, setTotalMatches] = useState(0);
+
+  // Store setState functions in a ref to avoid passing them through itemData
+  const stateCallbacksRef = useRef({
+    setFocusedRowIndex,
+    setSelectedRowIndex,
+  });
+
+  // Update ref when functions change
+  useEffect(() => {
+    stateCallbacksRef.current = {
+      setFocusedRowIndex,
+      setSelectedRowIndex,
+    };
+  }, [setFocusedRowIndex, setSelectedRowIndex]);
 
   // Filter columns based on showAllColumns
   const visibleColumns = useMemo(() => {
@@ -337,150 +492,48 @@ const SearchableVirtualTable = <T extends any>({
     }
   }, [searchMatches]);
 
-  // Memoized row data to prevent unnecessary re-renders
-  const rowData = useMemo<RowData<T>>(() => ({
-    items: data,
-    columns: visibleColumns.map(col => ({
+  // Pre-process columns with formatters
+  const processedColumns = useMemo(() => {
+    return visibleColumns.map(col => ({
       ...col,
       formatter: createHighlightFormatter(col, col.formatter)
-    })),
-    onRowClick,
-    highlightTerm: searchState.highlightTerm,
-    enableHighlighting,
+    }));
+  }, [visibleColumns, createHighlightFormatter]);
+
+  // Create stable itemData object for react-window
+  // Note: We need to ensure all values are serializable for react-window's internal Object.values() call
+  const itemData = useMemo(() => {
+    // Ensure all required data exists
+    if (!data || !processedColumns) {
+      console.warn('[SearchableVirtualTable] Missing data or columns for itemData');
+      return null;
+    }
+
+    // Convert Map to plain object for react-window compatibility
+    // react-window uses Object.values() internally which doesn't work with Maps
+    const searchMatchesObj = Object.fromEntries(searchMatches || new Map());
+
+    return {
+      items: data,
+      columns: processedColumns,
+      highlightTerm: searchState.highlightTerm || '',
+      focusedRowIndex,
+      selectedRowIndex,
+      searchMatches: searchMatchesObj, // Use plain object instead of Map for react-window compatibility
+      showSearchIndicator,
+      enableKeyboardNavigation,
+      // Note: All functions removed to ensure Object.values() compatibility
+    };
+  }, [
+    data,
+    processedColumns,
+    searchState.highlightTerm,
     focusedRowIndex,
     selectedRowIndex,
     searchMatches,
-    highlightIntensity,
-  }), [data, visibleColumns, onRowClick, searchState.highlightTerm, enableHighlighting, focusedRowIndex, selectedRowIndex, searchMatches, highlightIntensity, createHighlightFormatter]);
-
-  // Memoized Row renderer component with enhanced highlighting and navigation support
-  const Row = React.memo(useCallback(({ index, style }: { index: number; style: React.CSSProperties }) => {
-    const {
-      items,
-      columns,
-      onRowClick,
-      highlightTerm,
-      focusedRowIndex,
-      selectedRowIndex,
-      searchMatches,
-      highlightIntensity
-    } = rowData;
-    const item = items[index];
-
-    const handleClick = () => {
-      setSelectedRowIndex(index);
-      setFocusedRowIndex(index);
-      if (onRowClick) {
-        onRowClick(item, index);
-      }
-    };
-
-    // Check if this row matches the current search
-    const matchCount = searchMatches.get(index) || 0;
-    const isMatch = matchCount > 0;
-    const isFocused = index === focusedRowIndex;
-    const isSelected = index === selectedRowIndex;
-
-    // Determine row background based on state
-    let backgroundColor;
-    if (isSelected) {
-      backgroundColor = '#1976d2';
-    } else if (isFocused) {
-      backgroundColor = '#e3f2fd';
-    } else if (isMatch) {
-      backgroundColor = index % 2 === 0 ? '#fff8e1' : '#fff3cd';
-    } else {
-      backgroundColor = index % 2 === 0 ? 'white' : '#fafafa';
-    }
-
-    // Get intensity class based on match count
-    const getIntensityClass = (count: number) => {
-      if (count >= 3) return 'search-match-intensity--high';
-      if (count >= 2) return 'search-match-intensity--medium';
-      return 'search-match-intensity--low';
-    };
-
-    return (
-      <div
-        className={`
-          ${isMatch ? 'table-row--highlighted' : ''}
-          ${isFocused ? 'search-result--focused' : ''}
-          ${isSelected ? 'search-result--selected' : ''}
-        `.trim()}
-        style={{
-          ...style,
-          display: 'flex',
-          alignItems: 'center',
-          borderBottom: '1px solid #e0e0e0',
-          backgroundColor,
-          cursor: onRowClick ? 'pointer' : 'default',
-          transition: 'all 0.2s ease',
-          position: 'relative',
-          color: isSelected ? 'white' : '#333',
-        }}
-        onClick={handleClick}
-        onMouseEnter={() => {
-          if (enableKeyboardNavigation && !isSelected) {
-            setFocusedRowIndex(index);
-          }
-        }}
-      >
-        {/* Enhanced search match indicator */}
-        {showSearchIndicator && isMatch && (
-          <>
-            <div
-              className={`search-match-intensity ${getIntensityClass(matchCount)}`}
-            />
-            {matchCount > 1 && (
-              <div className="search-results-indicator">
-                {matchCount}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Navigation indicator for focused/selected rows */}
-        {(isFocused || isSelected) && enableKeyboardNavigation && (
-          <div className="search-navigation-indicator">
-            {isSelected ? '✓' : '▶'}
-          </div>
-        )}
-
-        {columns.map((column: SearchableTableColumn<T>, colIndex: number) => {
-          const value = item[column.key];
-          const displayValue = column.formatter ? column.formatter(value, item) : value;
-
-          // Check if this cell has matches
-          const cellHasMatch = highlightTerm && column.searchable !== false && value &&
-            value.toString().toLowerCase().includes(highlightTerm.toLowerCase());
-
-          return (
-            <div
-              key={`${column.key as string}-${colIndex}`}
-              className={cellHasMatch ? 'table-cell--has-match' : ''}
-              style={{
-                width: column.width,
-                padding: '8px 12px',
-                textAlign: column.align || 'left',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                fontSize: '14px',
-                color: isSelected ? 'white' : '#333',
-                paddingLeft: showSearchIndicator && colIndex === 0 ? '28px' : '12px',
-                position: 'relative',
-              }}
-              title={`${typeof value === 'string' ? value : String(value)}${
-                cellHasMatch ? ` (${matchCount} matches in row)` : ''
-              }`}
-            >
-              {displayValue as React.ReactNode}
-            </div>
-          );
-        })}
-      </div>
-    );
-  }, [rowData, showSearchIndicator, enableKeyboardNavigation]));
+    showSearchIndicator,
+    enableKeyboardNavigation
+  ]);
 
   // Handle sorting
   const handleSort = useCallback((field: string) => {
@@ -608,16 +661,23 @@ const SearchableVirtualTable = <T extends any>({
       </div>
 
       {/* Virtual List */}
-      <List
-        ref={listRef}
-        height={height - 50 - (searchResultsSummary ? 32 : 0)}
-        width={totalWidth}
-        itemCount={data.length}
-        itemSize={rowHeight}
-        overscanCount={overscanCount}
-      >
-        {Row}
-      </List>
+      {data && data.length > 0 && itemData ? (
+        <List
+          ref={listRef}
+          height={height - 50 - (searchResultsSummary ? 32 : 0)}
+          width={totalWidth}
+          itemCount={data.length}
+          itemSize={rowHeight}
+          overscanCount={overscanCount}
+          itemData={itemData}
+        >
+          {VirtualizedRow}
+        </List>
+      ) : (
+        <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+          {!itemData ? 'Loading table data...' : 'No data to display'}
+        </div>
+      )}
 
       {/* Enhanced Footer with detailed search stats */}
       <div

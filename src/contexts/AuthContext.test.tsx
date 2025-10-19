@@ -11,9 +11,12 @@ jest.mock('../lib/supabase', () => ({
       getSession: jest.fn(),
       onAuthStateChange: jest.fn(),
       signOut: jest.fn(),
+      getUser: jest.fn(),
     },
     from: jest.fn(),
   },
+  supabaseUrl: 'https://test.supabase.co',
+  supabaseAnonKey: 'test-anon-key',
 }));
 
 // Mock usersService
@@ -55,6 +58,15 @@ describe('AuthContext', () => {
     updatedAt: new Date(),
   };
 
+  // Helper function to mock fetch for profile data
+  const mockFetchProfile = (profileData: any) => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => [profileData],
+    } as Response);
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
 
@@ -62,6 +74,9 @@ describe('AuthContext', () => {
     (supabase.auth.onAuthStateChange as jest.Mock).mockReturnValue({
       data: { subscription: { unsubscribe: jest.fn() } },
     });
+
+    // Clear fetch mock
+    delete (global as any).fetch;
   });
 
   describe('useAuth hook', () => {
@@ -114,6 +129,7 @@ describe('AuthContext', () => {
     it('should correctly check admin permissions', async () => {
       const mockSession = {
         user: { id: 'user1', email: 'test@example.com' },
+        access_token: 'mock-access-token',
       };
 
       (supabase.auth.getSession as jest.Mock).mockResolvedValue({
@@ -121,10 +137,28 @@ describe('AuthContext', () => {
         error: null,
       });
 
-      (usersService.getCurrentUserProfile as jest.Mock).mockResolvedValue({
-        data: { ...mockUserProfile, role: 'admin' },
-        error: null,
-      });
+      // Mock the fetch call that loadUserProfile uses
+      const profileData = {
+        id: 'user1',
+        firm_id: 'firm1',
+        email: 'test@example.com',
+        full_name: 'Test User',
+        role: 'admin',
+        status: 'active',
+        avatar_url: null,
+        job_title: 'Developer',
+        department: 'Engineering',
+        phone_number: null,
+        bio: null,
+        email_verified: true,
+        mfa_enabled: false,
+        preferences: mockUserProfile.preferences,
+        last_login_at: new Date().toISOString(),
+        login_count: 5,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      mockFetchProfile(profileData);
 
       const wrapper = ({ children }: { children: React.ReactNode }) => (
         <AuthProvider>{children}</AuthProvider>
@@ -134,6 +168,10 @@ describe('AuthContext', () => {
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
+      });
+
+      await waitFor(() => {
+        expect(result.current.userProfile).not.toBeNull();
       });
 
       expect(result.current.hasPermission('users.view')).toBe(true);
@@ -145,6 +183,7 @@ describe('AuthContext', () => {
     it('should correctly check user permissions', async () => {
       const mockSession = {
         user: { id: 'user1', email: 'test@example.com' },
+        access_token: 'mock-access-token',
       };
 
       (supabase.auth.getSession as jest.Mock).mockResolvedValue({
@@ -152,10 +191,28 @@ describe('AuthContext', () => {
         error: null,
       });
 
-      (usersService.getCurrentUserProfile as jest.Mock).mockResolvedValue({
-        data: { ...mockUserProfile, role: 'user' },
-        error: null,
-      });
+      // Mock the fetch call with user role
+      const profileData = {
+        id: 'user1',
+        firm_id: 'firm1',
+        email: 'test@example.com',
+        full_name: 'Test User',
+        role: 'user',
+        status: 'active',
+        avatar_url: null,
+        job_title: 'Developer',
+        department: 'Engineering',
+        phone_number: null,
+        bio: null,
+        email_verified: true,
+        mfa_enabled: false,
+        preferences: mockUserProfile.preferences,
+        last_login_at: new Date().toISOString(),
+        login_count: 5,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      mockFetchProfile(profileData);
 
       const wrapper = ({ children }: { children: React.ReactNode }) => (
         <AuthProvider>{children}</AuthProvider>
@@ -165,6 +222,10 @@ describe('AuthContext', () => {
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
+      });
+
+      await waitFor(() => {
+        expect(result.current.userProfile).not.toBeNull();
       });
 
       expect(result.current.hasPermission('clients.view')).toBe(true);
@@ -176,6 +237,7 @@ describe('AuthContext', () => {
     it('should correctly check viewer permissions', async () => {
       const mockSession = {
         user: { id: 'user1', email: 'test@example.com' },
+        access_token: 'mock-access-token',
       };
 
       (supabase.auth.getSession as jest.Mock).mockResolvedValue({
@@ -183,10 +245,28 @@ describe('AuthContext', () => {
         error: null,
       });
 
-      (usersService.getCurrentUserProfile as jest.Mock).mockResolvedValue({
-        data: { ...mockUserProfile, role: 'viewer' },
-        error: null,
-      });
+      // Mock the fetch call with viewer role
+      const profileData = {
+        id: 'user1',
+        firm_id: 'firm1',
+        email: 'test@example.com',
+        full_name: 'Test User',
+        role: 'viewer',
+        status: 'active',
+        avatar_url: null,
+        job_title: 'Developer',
+        department: 'Engineering',
+        phone_number: null,
+        bio: null,
+        email_verified: true,
+        mfa_enabled: false,
+        preferences: mockUserProfile.preferences,
+        last_login_at: new Date().toISOString(),
+        login_count: 5,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      mockFetchProfile(profileData);
 
       const wrapper = ({ children }: { children: React.ReactNode }) => (
         <AuthProvider>{children}</AuthProvider>
@@ -196,6 +276,10 @@ describe('AuthContext', () => {
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
+      });
+
+      await waitFor(() => {
+        expect(result.current.userProfile).not.toBeNull();
       });
 
       expect(result.current.hasPermission('clients.view')).toBe(true);
@@ -265,6 +349,7 @@ describe('AuthContext', () => {
     it('should refresh user profile data', async () => {
       const mockSession = {
         user: { id: 'user1', email: 'test@example.com' },
+        access_token: 'mock-access-token',
       };
 
       (supabase.auth.getSession as jest.Mock).mockResolvedValue({
@@ -272,12 +357,42 @@ describe('AuthContext', () => {
         error: null,
       });
 
-      const initialProfile = { ...mockUserProfile, fullName: 'Initial Name' };
-      const updatedProfile = { ...mockUserProfile, fullName: 'Updated Name' };
+      const initialProfileData = {
+        id: 'user1',
+        firm_id: 'firm1',
+        email: 'test@example.com',
+        full_name: 'Initial Name',
+        role: 'admin',
+        status: 'active',
+        avatar_url: null,
+        job_title: 'Developer',
+        department: 'Engineering',
+        phone_number: null,
+        bio: null,
+        email_verified: true,
+        mfa_enabled: false,
+        preferences: mockUserProfile.preferences,
+        last_login_at: new Date().toISOString(),
+        login_count: 5,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
 
-      (usersService.getCurrentUserProfile as jest.Mock)
-        .mockResolvedValueOnce({ data: initialProfile, error: null })
-        .mockResolvedValueOnce({ data: updatedProfile, error: null });
+      const updatedProfileData = {
+        ...initialProfileData,
+        full_name: 'Updated Name',
+      };
+
+      // Mock fetch to return initial profile first, then updated profile
+      let callCount = 0;
+      global.fetch = jest.fn().mockImplementation(() => {
+        callCount++;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [callCount === 1 ? initialProfileData : updatedProfileData],
+        } as Response);
+      });
 
       const wrapper = ({ children }: { children: React.ReactNode }) => (
         <AuthProvider>{children}</AuthProvider>
@@ -287,6 +402,10 @@ describe('AuthContext', () => {
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
+      });
+
+      await waitFor(() => {
+        expect(result.current.userProfile).not.toBeNull();
       });
 
       expect(result.current.userProfile?.fullName).toBe('Initial Name');
