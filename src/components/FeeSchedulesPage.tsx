@@ -13,7 +13,7 @@ const FeeSchedulesPage: React.FC = () => {
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<FeeSchedule | null>(null);
 
-  // Filter fee schedules
+  // Filter and sort fee schedules
   const filteredSchedules = useMemo(() => {
     let schedules = feeSchedules;
 
@@ -30,7 +30,14 @@ const FeeSchedulesPage: React.FC = () => {
       );
     }
 
-    return schedules;
+    // Sort by status (active first) then by name A-Z
+    return schedules.sort((a, b) => {
+      // Active comes before inactive
+      if (a.status === 'active' && b.status !== 'active') return -1;
+      if (a.status !== 'active' && b.status === 'active') return 1;
+      // Within same status, sort alphabetically by name
+      return a.name.localeCompare(b.name);
+    });
   }, [feeSchedules, searchTerm, statusFilter]);
 
   // Group by status and sort alphabetically
@@ -246,81 +253,119 @@ const FeeSchedulesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Fee Schedules by Status */}
-      {(['active', 'inactive'] as FeeScheduleStatus[]).map((status) => {
-        const schedules = groupedSchedules[status];
-        if (schedules.length === 0 && statusFilter === 'all') return null;
+      {/* Fee Schedules Table */}
+      <div style={{
+        backgroundColor: 'white',
+        borderRadius: '8px',
+        border: '1px solid #e0e0e0',
+        overflow: 'hidden'
+      }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '2px solid #e0e0e0' }}>
+                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>SCHEDULE NAME</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>CODE</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>TYPE</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>STRUCTURE</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>MIN FEE</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>STATUS</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredSchedules.map((schedule, index) => {
+                // Check if we need to add a section divider
+                const prevSchedule = index > 0 ? filteredSchedules[index - 1] : null;
+                const showDivider = prevSchedule && prevSchedule.status === 'active' && schedule.status === 'inactive';
 
-        return (
-          <div key={status} style={{ marginBottom: '32px' }}>
-            <h2 style={{
-              fontSize: '18px',
-              fontWeight: 'bold',
-              marginBottom: '16px',
-              color: '#1a202c',
-              textTransform: 'capitalize',
-            }}>
-              {getStatusLabel(status)} Fee Schedules ({schedules.length})
-            </h2>
-
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))',
-              gap: '16px',
-            }}>
-              {schedules.map((schedule) => (
-                <div
-                  key={schedule.id}
-                  style={{
-                    backgroundColor: 'white',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                    padding: '16px',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = getStatusColor(schedule.status);
-                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = '#e2e8f0';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                  onClick={() => handleViewFeeSchedule(schedule)}
-                >
-                  {/* Header */}
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    marginBottom: '12px',
-                  }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                        <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#1a202c' }}>
-                          {schedule.name}
-                        </h3>
-                        {schedule.isDirectBill && (
-                          <span style={{
-                            fontSize: '10px',
-                            padding: '2px 6px',
-                            backgroundColor: '#fef3c7',
-                            color: '#92400e',
-                            borderRadius: '4px',
-                            fontWeight: 'bold',
-                          }}>
-                            DIRECT BILL
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: '14px', color: '#64748b', marginTop: '2px' }}>
-                        Code: {schedule.code}
-                      </div>
+                return (
+                  <React.Fragment key={schedule.id}>
+                    {showDivider && statusFilter === 'all' && (
+                      <tr style={{ backgroundColor: '#f5f5f5' }}>
+                        <td colSpan={7} style={{ padding: '12px 16px', fontWeight: 'bold', fontSize: '13px', color: '#666', borderTop: '2px solid #e0e0e0', borderBottom: '1px solid #e0e0e0' }}>
+                          Inactive Fee Schedules
+                        </td>
+                      </tr>
+                    )}
+                    <tr
+                      style={{
+                        borderBottom: '1px solid #f0f0f0',
+                        backgroundColor: index % 2 === 0 ? 'white' : '#fafafa',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => handleViewFeeSchedule(schedule)}
+                    >
+                  <td style={{ padding: '16px' }}>
+                    <div style={{ fontWeight: 'bold', color: '#333', fontSize: '14px', marginBottom: '4px' }}>
+                      {schedule.name}
+                      {schedule.isDirectBill && (
+                        <span style={{
+                          marginLeft: '8px',
+                          fontSize: '10px',
+                          padding: '2px 6px',
+                          backgroundColor: '#fef3c7',
+                          color: '#92400e',
+                          borderRadius: '4px',
+                          fontWeight: 'bold',
+                        }}>
+                          DIRECT BILL
+                        </span>
+                      )}
                     </div>
+                    <div style={{ fontSize: '12px', color: '#999' }}>
+                      {schedule.description}
+                    </div>
+                  </td>
+                  <td style={{ padding: '16px', fontSize: '14px', color: '#333', fontWeight: '500' }}>
+                    {schedule.code}
+                  </td>
+                  <td style={{ padding: '16px' }}>
+                    {schedule.tags && schedule.tags.length > 0 && (
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                        {schedule.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            style={{
+                              fontSize: '10px',
+                              padding: '3px 8px',
+                              backgroundColor: getTagColor(tag),
+                              color: 'white',
+                              borderRadius: '4px',
+                              fontWeight: '500',
+                              textTransform: 'capitalize',
+                            }}
+                          >
+                            {tag.replace('_', ' ')}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </td>
+                  <td style={{ padding: '16px', fontSize: '14px', color: '#666' }}>
+                    {schedule.structureType === 'tiered' && schedule.tiers && (
+                      <span>{schedule.tiers.length} tiers</span>
+                    )}
+                    {schedule.structureType === 'flat_rate' && schedule.flatRate !== undefined && (
+                      <span>{formatPercentage(schedule.flatRate)}</span>
+                    )}
+                    {schedule.structureType === 'flat_fee' && schedule.flatFeePerQuarter && (
+                      <span>{formatCurrency(schedule.flatFeePerQuarter)}/qtr</span>
+                    )}
+                  </td>
+                  <td style={{ padding: '16px', textAlign: 'center' }}>
+                    {schedule.hasMinimumFee && schedule.minimumFeePerYear ? (
+                      <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#f59e0b' }}>
+                        ${schedule.minimumFeePerYear.toLocaleString()}/yr
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: '14px', color: '#999' }}>—</span>
+                    )}
+                  </td>
+                  <td style={{ padding: '16px', textAlign: 'center' }}>
                     <span style={{
                       fontSize: '11px',
-                      padding: '4px 8px',
+                      padding: '4px 12px',
                       backgroundColor: getStatusColor(schedule.status),
                       color: 'white',
                       borderRadius: '12px',
@@ -329,131 +374,68 @@ const FeeSchedulesPage: React.FC = () => {
                     }}>
                       {getStatusLabel(schedule.status)}
                     </span>
-                  </div>
-
-                  {/* Tags */}
-                  {schedule.tags && schedule.tags.length > 0 && (
-                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
-                      {schedule.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          style={{
-                            fontSize: '10px',
-                            padding: '3px 8px',
-                            backgroundColor: getTagColor(tag),
-                            color: 'white',
-                            borderRadius: '4px',
-                            fontWeight: '500',
-                            textTransform: 'capitalize',
-                          }}
-                        >
-                          {tag.replace('_', ' ')}
-                        </span>
-                      ))}
+                  </td>
+                  <td style={{ padding: '16px' }}>
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewFeeSchedule(schedule);
+                        }}
+                        style={{
+                          padding: '6px',
+                          backgroundColor: 'transparent',
+                          border: '1px solid #e0e0e0',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                        title="View Fee Schedule"
+                      >
+                        <Eye size={16} color="#666" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditSchedule(schedule);
+                        }}
+                        style={{
+                          padding: '6px',
+                          backgroundColor: 'transparent',
+                          border: '1px solid #e0e0e0',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                        title="Edit Fee Schedule"
+                      >
+                        <Edit2 size={16} color="#666" />
+                      </button>
                     </div>
-                  )}
+                  </td>
+                </tr>
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
-                  {/* Description */}
-                  <p style={{
-                    fontSize: '13px',
-                    color: '#64748b',
-                    marginBottom: '12px',
-                    minHeight: '36px',
-                  }}>
-                    {schedule.description}
-                  </p>
-
-                  {/* Quick Info */}
-                  <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '12px' }}>
-                    {schedule.structureType === 'tiered' && schedule.tiers && (
-                      <div>{schedule.tiers.length} tiers</div>
-                    )}
-                    {schedule.structureType === 'flat_rate' && schedule.flatRate !== undefined && (
-                      <div>{formatPercentage(schedule.flatRate)} flat rate</div>
-                    )}
-                    {schedule.structureType === 'flat_fee' && schedule.flatFeePerQuarter && (
-                      <div>{formatCurrency(schedule.flatFeePerQuarter)}/quarter</div>
-                    )}
-                    {schedule.hasMinimumFee && schedule.minimumFeePerYear && (
-                      <div style={{ color: '#f59e0b', marginTop: '4px' }}>
-                        ${schedule.minimumFeePerYear.toLocaleString()} min/year
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleViewFeeSchedule(schedule);
-                      }}
-                      style={{
-                        flex: 1,
-                        padding: '8px',
-                        backgroundColor: '#f8fafc',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '6px',
-                        fontSize: '13px',
-                        fontWeight: '500',
-                        color: '#475569',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                        transition: 'all 0.2s',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#f1f5f9';
-                        e.currentTarget.style.borderColor = '#cbd5e1';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = '#f8fafc';
-                        e.currentTarget.style.borderColor = '#e2e8f0';
-                      }}
-                    >
-                      <Eye size={14} />
-                      View
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditSchedule(schedule);
-                      }}
-                      style={{
-                        flex: 1,
-                        padding: '8px',
-                        backgroundColor: '#eff6ff',
-                        border: '1px solid #bfdbfe',
-                        borderRadius: '6px',
-                        fontSize: '13px',
-                        fontWeight: '500',
-                        color: '#1e40af',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                        transition: 'all 0.2s',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#dbeafe';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = '#eff6ff';
-                      }}
-                    >
-                      <Edit2 size={14} />
-                      Edit
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+        {filteredSchedules.length === 0 && (
+          <div style={{
+            padding: '60px 20px',
+            textAlign: 'center',
+            color: '#999'
+          }}>
+            <p style={{ fontSize: '16px', marginBottom: '8px' }}>No fee schedules found</p>
+            <p style={{ fontSize: '14px' }}>Try adjusting your search or filters</p>
           </div>
-        );
-      })}
+        )}
+      </div>
 
       {/* Form Modal */}
       <FeeScheduleFormModal

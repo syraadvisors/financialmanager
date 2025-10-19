@@ -236,6 +236,7 @@ export class EnhancedFileValidator {
       const colCount = Array.isArray(row) ? row.length : 0;
       columnCounts.set(colCount, (columnCounts.get(colCount) || 0) + 1);
 
+      // Only warn if column count doesn't match expected AND it's not zero (empty row)
       if (colCount !== expectedColumns && colCount > 0) {
         if (Math.abs(colCount - expectedColumns) > 2) {
           critical.push({
@@ -244,24 +245,25 @@ export class EnhancedFileValidator {
             message: `Row has ${colCount} columns, expected ${expectedColumns}`,
             suggestion: 'Check CSV format and column alignment'
           });
-        } else {
-          warnings.push({
-            type: 'data_quality',
-            row: index + 1,
-            message: `Row has ${colCount} columns, expected ${expectedColumns}`,
-            impact: 'medium'
-          });
         }
+        // Remove the else block that was generating warnings for small differences
+        // Small differences (1-2 columns) are acceptable and often expected
       }
     });
 
-    // Check for consistent column counts
+    // Only warn about inconsistent columns if there are MANY different counts (>3)
+    // AND the most common count is not the expected count
     if (columnCounts.size > 3) {
-      warnings.push({
-        type: 'data_quality',
-        message: `Inconsistent column counts found: ${Array.from(columnCounts.keys()).join(', ')}`,
-        impact: 'high'
-      });
+      const mostCommonCount = Array.from(columnCounts.entries())
+        .reduce((a, b) => a[1] > b[1] ? a : b)[0];
+
+      if (mostCommonCount !== expectedColumns) {
+        warnings.push({
+          type: 'data_quality',
+          message: `Inconsistent column counts found across file`,
+          impact: 'medium'
+        });
+      }
     }
 
     return { critical, warnings };
@@ -818,33 +820,8 @@ export class EnhancedFileValidator {
     const errors: ValidationError[] = [];
     const warnings: ValidationWarning[] = [];
 
-    // Account count validation
-    const expectedCounts = APP_CONFIG.VALIDATION.EXPECTED_COUNTS;
-    const accountCount = uniqueAccounts.size;
-
-    if (fileType === FileType.ACCOUNT_BALANCE) {
-      if (accountCount < expectedCounts.BALANCE_ACCOUNTS_MIN) {
-        warnings.push({
-          type: 'data_quality',
-          message: `Low account count: ${accountCount} (expected ${expectedCounts.BALANCE_ACCOUNTS_MIN}+)`,
-          impact: 'medium'
-        });
-      } else if (accountCount > expectedCounts.BALANCE_ACCOUNTS_MAX) {
-        warnings.push({
-          type: 'data_quality',
-          message: `High account count: ${accountCount} (expected <${expectedCounts.BALANCE_ACCOUNTS_MAX})`,
-          impact: 'low'
-        });
-      }
-    } else if (fileType === FileType.POSITIONS) {
-      if (data.length < expectedCounts.POSITIONS_MIN) {
-        warnings.push({
-          type: 'data_quality',
-          message: `Low positions count: ${data.length} (expected ${expectedCounts.POSITIONS_MIN}+)`,
-          impact: 'medium'
-        });
-      }
-    }
+    // Row count validation removed - counts vary greatly based on customer data
+    // No need to warn about row counts as they are expected to vary
 
     return { errors, warnings };
   }
@@ -853,7 +830,7 @@ export class EnhancedFileValidator {
     const warnings: ValidationWarning[] = [];
 
     // Check for too many duplicate rows
-    for (const [rowData, count] of patterns.repeatingData) {
+    for (const [, count] of patterns.repeatingData) {
       if (count > Math.max(5, totalRows * 0.05)) {
         warnings.push({
           type: 'data_quality',

@@ -31,6 +31,75 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
     toggleWebWorker
   } = useCsvImporter(onDataImported);
 
+  // Column display name mapping
+  const columnDisplayNames: Record<string, string> = {
+    asOfBusinessDate: 'Balance Date',
+    accountNumber: 'Account Number',
+    accountName: 'Account Name',
+    netMarketValue: 'Net Market Value',
+    portfolioValue: 'Portfolio Value',
+    marketValueShort: 'Market Value Short',
+    totalCash: 'Total Cash',
+    cashAccountBalanceNetCreditOrDebit: 'Balance Debit',
+    cashAccountBalanceNetMarketValue: 'Balance Value',
+    cashAccountBalanceMoneyMarketFunds: 'Balance Funds',
+    equityPercentage: 'Equity Percentage',
+    optionRequirements: 'Option Requirements',
+    monthEndDivPayout: 'Balance Payout',
+    marginAccountBalanceCreditOrDebit: 'Balance Debit',
+    marginAccountBalanceMarketValueLong: 'Balance Long',
+    marginAccountBalanceMarketValueShort: 'Balance Short',
+    marginAccountBalanceEquityIncludingOptions: 'Balance Options',
+    marginAccountBalanceMarginCashAvailable: 'Balance Available',
+    marginAccountBalanceEquityExcludingOptions: 'Balance Options',
+    marginBuyingPower: 'Margin Buying Power',
+    mtdMarginInterest: 'Mtd Margin Interest',
+  };
+
+  // Columns to display in preview
+  const previewColumns = ['asOfBusinessDate', 'accountNumber', 'accountName', 'portfolioValue', 'totalCash'];
+
+  const getDisplayName = (key: string): string => {
+    return columnDisplayNames[key] || key;
+  };
+
+  const formatCellValue = (key: string, value: any): string => {
+    if (value === null || value === undefined || value === '') {
+      return '';
+    }
+
+    // Format date fields as MM/DD/YYYY
+    if (key === 'asOfBusinessDate') {
+      try {
+        const date = new Date(value);
+        if (!isNaN(date.getTime())) {
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          const year = date.getFullYear();
+          return `${month}/${day}/${year}`;
+        }
+      } catch {
+        return value.toString();
+      }
+    }
+
+    // Format currency fields
+    if (key === 'portfolioValue' || key === 'totalCash') {
+      const numValue = typeof value === 'number' ? value : parseFloat(value);
+      if (!isNaN(numValue)) {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }).format(numValue);
+      }
+    }
+
+    // Default formatting
+    return typeof value === 'number' ? value.toLocaleString() : value.toString();
+  };
+
   const handleDrop = (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (file) {
@@ -389,36 +458,77 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
       )}
 
       {preview.length > 0 && (
-        <div>
-          <h3>Data Preview (first {APP_CONFIG.FILE.PREVIEW_ROWS} rows):</h3>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#f0f0f0' }}>
-                  {Object.keys(preview[0]).map(key => (
-                    <th key={key} style={{ 
-                      border: '1px solid #ddd', 
-                      padding: '8px', 
-                      textAlign: 'left',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {key}
-                    </th>
-                  ))}
+        <div style={{
+          marginTop: '20px',
+          border: '1px solid #e0e0e0',
+          borderRadius: '8px',
+          backgroundColor: 'white',
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            padding: '16px',
+            backgroundColor: '#f8f9fa',
+            borderBottom: '1px solid #e0e0e0'
+          }}>
+            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#333' }}>
+              Data Preview (first {APP_CONFIG.FILE.PREVIEW_ROWS} rows)
+            </h3>
+            <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#666' }}>
+              Scroll horizontally or vertically to view all data
+            </p>
+          </div>
+          <div style={{
+            overflowX: 'auto',
+            overflowY: 'auto',
+            maxHeight: '500px',
+            maxWidth: '100%'
+          }}>
+            <table style={{
+              minWidth: '100%',
+              borderCollapse: 'collapse',
+              fontSize: '14px'
+            }}>
+              <thead style={{
+                position: 'sticky',
+                top: 0,
+                backgroundColor: '#f0f0f0',
+                zIndex: 1
+              }}>
+                <tr>
+                  {previewColumns
+                    .filter(col => preview[0].hasOwnProperty(col))
+                    .map(key => (
+                      <th key={key} style={{
+                        border: '1px solid #ddd',
+                        padding: '8px 12px',
+                        textAlign: 'left',
+                        whiteSpace: 'nowrap',
+                        fontWeight: '600',
+                        color: '#333',
+                        backgroundColor: '#f0f0f0'
+                      }}>
+                        {getDisplayName(key)}
+                      </th>
+                    ))}
                 </tr>
               </thead>
               <tbody>
                 {preview.map((row, index) => (
-                  <tr key={index}>
-                    {Object.values(row).map((value: any, idx) => (
-                      <td key={idx} style={{ 
-                        border: '1px solid #ddd', 
-                        padding: '8px',
-                        whiteSpace: 'nowrap'
-                      }}>
-                        {typeof value === 'number' ? value.toLocaleString() : value}
-                      </td>
-                    ))}
+                  <tr key={index} style={{
+                    backgroundColor: index % 2 === 0 ? '#ffffff' : '#f8f9fa'
+                  }}>
+                    {previewColumns
+                      .filter(col => row.hasOwnProperty(col))
+                      .map(key => (
+                        <td key={key} style={{
+                          border: '1px solid #ddd',
+                          padding: '8px 12px',
+                          whiteSpace: 'nowrap',
+                          color: '#495057'
+                        }}>
+                          {formatCellValue(key, row[key])}
+                        </td>
+                      ))}
                   </tr>
                 ))}
               </tbody>

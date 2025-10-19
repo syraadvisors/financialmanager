@@ -117,8 +117,13 @@ const MarketingHeader: React.FC<MarketingHeaderProps> = ({ onLoginClick }) => {
     };
   }, []);
 
-  const handleUserCircleClick = () => {
+  const handleDashboardClick = () => {
     // Navigate to the app dashboard
+    navigate('/app');
+  };
+
+  const handleUserCircleClick = () => {
+    // Navigate to app - user can access profile from the navigation menu there
     navigate('/app');
   };
 
@@ -149,14 +154,40 @@ const MarketingHeader: React.FC<MarketingHeaderProps> = ({ onLoginClick }) => {
         <li><Link to="/contact" onClick={() => setMobileMenuOpen(false)}>Contact</Link></li>
         <li>
           {user ? (
-            <span
-              className="user-circle"
-              onClick={() => { handleUserCircleClick(); setMobileMenuOpen(false); }}
-              style={{ cursor: 'pointer' }}
-              title="Go to Dashboard"
-            >
-              {userInitials}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <button
+                onClick={() => { handleDashboardClick(); setMobileMenuOpen(false); }}
+                className="button primary-button"
+                style={{
+                  padding: '0.7rem 1.8rem',
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  background: 'linear-gradient(135deg, #2196f3 0%, #1976d2 100%)',
+                  border: 'none',
+                  boxShadow: '0 4px 12px rgba(33, 150, 243, 0.3)',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 6px 16px rgba(33, 150, 243, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(33, 150, 243, 0.3)';
+                }}
+              >
+                Go to FeeMGR Dashboard
+              </button>
+              <span
+                className="user-circle"
+                onClick={() => { handleUserCircleClick(); setMobileMenuOpen(false); }}
+                style={{ cursor: 'pointer' }}
+                title="My Profile"
+              >
+                {userInitials}
+              </span>
+            </div>
           ) : (
             <button
               onClick={(e) => { e.preventDefault(); onLoginClick(); setMobileMenuOpen(false); }}

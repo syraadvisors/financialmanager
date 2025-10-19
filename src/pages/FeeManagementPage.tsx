@@ -16,8 +16,9 @@ import AccountsPage from '../components/AccountsPage';
 import MasterAccountsPage from '../components/MasterAccountsPage';
 import HouseholdsPage from '../components/HouseholdsPage';
 import RelationshipsPage from '../components/RelationshipsPage';
-import BillingPeriodsPage from '../components/BillingPeriodsPage';
 import FeeSchedulesPage from '../components/FeeSchedulesPage';
+import BillingFeeAgreementsPage from '../components/BillingFeeAgreementsPage';
+import BillingPeriodsPage from '../components/BillingPeriodsPage';
 import FeeReportsPage from '../components/FeeReportsPage';
 
 // Lazy load the fee calculation demo
@@ -100,6 +101,11 @@ const FeeManagementPage: React.FC<FeeManagementPageProps> = ({ activeTab: initia
       icon: <FileText size={16} />,
     },
     {
+      id: 'agreements',
+      label: 'Billing Agreements',
+      icon: <DollarSign size={16} />,
+    },
+    {
       id: 'billing',
       label: 'Billing Periods',
       icon: <Calendar size={16} />,
@@ -160,6 +166,9 @@ const FeeManagementPage: React.FC<FeeManagementPageProps> = ({ activeTab: initia
 
       case 'schedules':
         return <FeeSchedulesPage />;
+
+      case 'agreements':
+        return <BillingFeeAgreementsPage />;
 
       case 'billing':
         return <BillingPeriodsPage />;

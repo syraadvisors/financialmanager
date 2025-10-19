@@ -111,19 +111,21 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
   const displayData = useMemo(() => {
     let data = balanceData;
 
-    // Apply search results if there's a global search
-    if (searchState.globalQuery && searchState.globalResults.balanceData.length >= 0) {
+    // Apply search results if there's a global search with actual query
+    if (searchState.globalQuery && searchState.globalQuery.trim()) {
       data = searchState.globalResults.balanceData;
     }
-
-    // Apply filters if there are active filters
-    if (searchState.activeFilters.length > 0) {
+    // Apply filters if there are active filters (but no search)
+    else if (searchState.activeFilters.length > 0) {
       const filteredData = getFilteredData();
       data = filteredData.balanceData;
     }
 
+    // Filter out any null/undefined rows and ensure data is valid
+    data = (data || []).filter(row => row != null && typeof row === 'object');
+
     // Sort the data
-    if (sortField) {
+    if (sortField && data.length > 0) {
       data = sortData(data, sortField, sortDirection);
     }
 
@@ -160,7 +162,11 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
 
   // Calculate summary statistics
   const summaryStats = useMemo(() => {
-    if (displayData.length === 0) return null;
+    console.log('[EnhancedBalanceDataPage] displayData length:', displayData.length);
+    if (displayData.length === 0) {
+      console.log('[EnhancedBalanceDataPage] No displayData, returning null for summary');
+      return null;
+    }
 
     const totalPortfolioValue = displayData.reduce((sum, account) =>
       sum + (parseFloat(account.portfolioValue?.toString() || '0') || 0), 0
@@ -363,21 +369,28 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
 
       {/* Data Table */}
       <ErrorBoundary fallback={<DataProcessingErrorFallback />}>
-        <SearchableVirtualTable
-          data={displayData}
-          columns={columns}
-          height={600}
-          rowHeight={50}
-          showAllColumns={showAllColumns}
-          sortField={sortField}
-          sortDirection={sortDirection}
-          onSort={handleSort}
-          onRowClick={handleRowClick}
-          loading={appState.isLoading}
-          enableHighlighting={true}
-          showSearchIndicator={true}
-          overscanCount={10}
-        />
+        {(() => {
+          console.log('[EnhancedBalanceDataPage] About to render SearchableVirtualTable');
+          console.log('[EnhancedBalanceDataPage] displayData:', displayData);
+          console.log('[EnhancedBalanceDataPage] columns:', columns);
+          return (
+            <SearchableVirtualTable
+              data={displayData}
+              columns={columns}
+              height={600}
+              rowHeight={50}
+              showAllColumns={showAllColumns}
+              sortField={sortField}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+              onRowClick={handleRowClick}
+              loading={appState.isLoading}
+              enableHighlighting={true}
+              showSearchIndicator={true}
+              overscanCount={10}
+            />
+          );
+        })()}
       </ErrorBoundary>
 
       {/* Performance Info */}

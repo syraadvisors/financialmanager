@@ -1,56 +1,56 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Search, Plus, Edit2, Trash2, Building2, Download } from 'lucide-react';
 import { MasterAccount } from '../types/MasterAccount';
 import MasterAccountFormModal from './MasterAccountFormModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
-
-// Mock accounts data
-const mockAccounts = [
-  { id: '1', accountNumber: 'ACC-001', accountName: 'Growth Portfolio', clientName: 'John Smith', balance: 1250000, masterAccountId: 'ma-1' },
-  { id: '2', accountNumber: 'ACC-002', accountName: 'Retirement Fund', clientName: 'Jane Doe', balance: 850000, masterAccountId: 'ma-1' },
-  { id: '3', accountNumber: 'ACC-003', accountName: 'Trust Account', clientName: 'Bob Johnson', balance: 2100000, masterAccountId: 'ma-2' },
-  { id: '4', accountNumber: 'ACC-004', accountName: 'Savings Portfolio', clientName: 'Alice Williams', balance: 450000 },
-  { id: '5', accountNumber: 'ACC-005', accountName: 'Investment Account', clientName: 'Charlie Brown', balance: 750000 },
-];
-
-// Mock master accounts
-const initialMasterAccounts: MasterAccount[] = [
-  {
-    id: 'ma-1',
-    masterAccountNumber: 'MA-001',
-    masterAccountName: 'Primary Trading',
-    office: 'New York',
-    description: 'Main trading accounts',
-    assignedAccountIds: ['1', '2'],
-    totalAUM: 2100000,
-    numberOfAccounts: 2,
-    isActive: true,
-    createdDate: '2023-01-15',
-    lastModifiedDate: '2024-03-20',
-  },
-  {
-    id: 'ma-2',
-    masterAccountNumber: 'MA-002',
-    masterAccountName: 'Trust Accounts',
-    office: 'Chicago',
-    description: 'Trust and estate accounts',
-    assignedAccountIds: ['3'],
-    totalAUM: 2100000,
-    numberOfAccounts: 1,
-    isActive: true,
-    createdDate: '2023-02-10',
-    lastModifiedDate: '2024-02-15',
-  },
-];
+import { masterAccountsService } from '../services/api/masterAccounts.service';
+import { accountsService } from '../services/api/accounts.service';
+import { useFirm } from '../contexts/FirmContext';
+import toast from 'react-hot-toast';
 
 const MasterAccountsPage: React.FC = () => {
-  const [masterAccounts, setMasterAccounts] = useState<MasterAccount[]>(initialMasterAccounts);
+  const { firmId } = useFirm();
+  const [masterAccounts, setMasterAccounts] = useState<MasterAccount[]>([]);
+  const [allAccounts, setAllAccounts] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [editingMasterAccount, setEditingMasterAccount] = useState<MasterAccount | null>(null);
   const [deletingMasterAccount, setDeletingMasterAccount] = useState<MasterAccount | null>(null);
+
+  // Load master accounts and accounts from database
+  useEffect(() => {
+    const loadData = async () => {
+      if (!firmId) {
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+
+      // Load master accounts
+      const maResponse = await masterAccountsService.getAll(firmId);
+      if (maResponse.error) {
+        toast.error(`Failed to load master accounts: ${maResponse.error}`);
+      } else {
+        setMasterAccounts(maResponse.data || []);
+      }
+
+      // Load all accounts for this firm
+      const accountsResponse = await accountsService.getAll(firmId);
+      if (accountsResponse.error) {
+        toast.error(`Failed to load accounts: ${accountsResponse.error}`);
+      } else {
+        setAllAccounts(accountsResponse.data || []);
+      }
+
+      setIsLoading(false);
+    };
+
+    loadData();
+  }, [firmId]);
 
   // Filter master accounts
   const filteredMasterAccounts = useMemo(() => {
@@ -89,24 +89,75 @@ const MasterAccountsPage: React.FC = () => {
     setIsDeleteModalOpen(true);
   };
 
-  const confirmDeleteMasterAccount = () => {
-    if (deletingMasterAccount) {
-      // In production: unassign accounts, then delete master account
+  const confirmDeleteMasterAccount = async () => {
+    if (!deletingMasterAccount) return;
+
+    const deletePromise = masterAccountsService.delete(deletingMasterAccount.id);
+
+    toast.promise(
+      deletePromise,
+      {
+        loading: 'Deleting master account...',
+        success: 'Master account deleted successfully',
+        error: (err) => `Failed to delete: ${err.error || 'Unknown error'}`,
+      }
+    );
+
+    const response = await deletePromise;
+
+    if (!response.error) {
       setMasterAccounts(prev => prev.filter(ma => ma.id !== deletingMasterAccount.id));
       setIsDeleteModalOpen(false);
       setDeletingMasterAccount(null);
     }
   };
 
-  const handleSaveMasterAccount = (masterAccount: MasterAccount) => {
+  const handleSaveMasterAccount = async (masterAccount: MasterAccount) => {
+    if (!firmId) {
+      toast.error('No firm selected');
+      return;
+    }
+
     if (editingMasterAccount) {
       // Update existing
-      setMasterAccounts(prev => prev.map(ma =>
-        ma.id === masterAccount.id ? masterAccount : ma
-      ));
+      const updatePromise = masterAccountsService.update(masterAccount.id, masterAccount);
+
+      toast.promise(
+        updatePromise,
+        {
+          loading: 'Updating master account...',
+          success: 'Master account updated successfully',
+          error: (err) => `Failed to update: ${err.error || 'Unknown error'}`,
+        }
+      );
+
+      const response = await updatePromise;
+
+      if (!response.error) {
+        setMasterAccounts(prev => prev.map(ma =>
+          ma.id === masterAccount.id ? response.data! : ma
+        ));
+        setIsFormModalOpen(false);
+      }
     } else {
       // Add new
-      setMasterAccounts(prev => [...prev, masterAccount]);
+      const createPromise = masterAccountsService.create(masterAccount, firmId);
+
+      toast.promise(
+        createPromise,
+        {
+          loading: 'Creating master account...',
+          success: 'Master account created successfully',
+          error: (err) => `Failed to create: ${err.error || 'Unknown error'}`,
+        }
+      );
+
+      const response = await createPromise;
+
+      if (!response.error) {
+        setMasterAccounts(prev => [...prev, response.data!]);
+        setIsFormModalOpen(false);
+      }
     }
   };
 
@@ -165,6 +216,16 @@ const MasterAccountsPage: React.FC = () => {
 
   const activeMasterAccounts = masterAccounts.filter(ma => ma.isActive);
   const inactiveMasterAccounts = masterAccounts.filter(ma => !ma.isActive);
+
+  if (isLoading) {
+    return (
+      <div style={{ padding: '24px', textAlign: 'center' }}>
+        <div style={{ padding: '40px' }}>
+          <div style={{ fontSize: '18px', color: '#666' }}>Loading master accounts...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: '24px' }}>
@@ -483,7 +544,7 @@ const MasterAccountsPage: React.FC = () => {
         onClose={() => setIsFormModalOpen(false)}
         onSave={handleSaveMasterAccount}
         masterAccount={editingMasterAccount}
-        allAccounts={mockAccounts}
+        allAccounts={allAccounts}
       />
 
       {/* Delete Confirmation Modal */}

@@ -239,7 +239,23 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         const parsedState = JSON.parse(savedState);
         // Validate the saved state structure
         if (parsedState && typeof parsedState === 'object') {
-          dispatch({ type: 'RESTORE_STATE', payload: parsedState });
+          // Ensure arrays are valid
+          const validatedState = {
+            ...parsedState,
+            balanceData: Array.isArray(parsedState.balanceData)
+              ? parsedState.balanceData.filter((row: any) => row != null && typeof row === 'object')
+              : [],
+            positionsData: Array.isArray(parsedState.positionsData)
+              ? parsedState.positionsData.filter((row: any) => row != null && typeof row === 'object')
+              : [],
+            fileHistory: Array.isArray(parsedState.fileHistory) ? parsedState.fileHistory : [],
+          };
+          console.log('[AppContext] Loading state from localStorage:', {
+            balanceDataLength: validatedState.balanceData.length,
+            positionsDataLength: validatedState.positionsData.length,
+            firstBalanceRow: validatedState.balanceData[0]
+          });
+          dispatch({ type: 'RESTORE_STATE', payload: validatedState });
         }
       }
     } catch (error) {
@@ -322,6 +338,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({
 
   // Enhanced data import handler
   const handleDataImported = (data: any[], fileType: FileType, summary: any, fileName?: string) => {
+    console.log('[AppContext] handleDataImported called with:', {
+      dataLength: data?.length,
+      fileType,
+      firstRow: data?.[0],
+      summary
+    });
+
     const timestamp = new Date().toLocaleString();
 
     // Create file history entry
@@ -339,6 +362,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
 
     // Update appropriate data
     if (fileType === FileType.ACCOUNT_BALANCE) {
+      console.log('[AppContext] Setting balance data with', data.length, 'rows');
       setBalanceData(data);
     } else if (fileType === FileType.POSITIONS) {
       setPositionsData(data);

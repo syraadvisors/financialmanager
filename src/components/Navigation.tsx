@@ -199,6 +199,13 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
       requiresData: 'none',
     },
     {
+      id: PageType.BILLING_FEE_AGREEMENTS,
+      title: 'Billing Agreements',
+      description: 'Fee agreements',
+      icon: 'filetext',
+      requiresData: 'none',
+    },
+    {
       id: PageType.BILLING_PERIODS,
       title: 'Billing Periods',
       description: 'Manage billing',

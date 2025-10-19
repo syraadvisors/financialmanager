@@ -186,7 +186,9 @@ export const useCsvImporter = (onDataImported: (data: any[], fileType: FileType,
             return;
           }
 
+          let processedData = results.data;
           const columnCount = results.data[0].length;
+
           // Smart file type detection using both column count and content analysis
           const detectedType = smartDetectFileType(results.data);
           console.log(`Smart detection: ${detectedType} (${columnCount} columns)`);
@@ -211,10 +213,30 @@ export const useCsvImporter = (onDataImported: (data: any[], fileType: FileType,
             return;
           }
 
+          // Balance files have header rows, Position files do not
+          // Check if first row is a header (contains text in columns that should be numeric)
+          if (detectedType === FileType.ACCOUNT_BALANCE && processedData.length > 0) {
+            const firstRow = processedData[0];
+            // Check if portfolio value column (index 4) or total cash column (index 6) contains non-numeric text
+            const portfolioValueCell = (firstRow[4] || '').toString().trim();
+            const totalCashCell = (firstRow[6] || '').toString().trim();
+
+            // If these cells contain text that doesn't parse to a number, it's likely a header row
+            const isHeaderRow = (
+              (portfolioValueCell && isNaN(parseFloat(portfolioValueCell.replace(/[,$]/g, '')))) ||
+              (totalCashCell && isNaN(parseFloat(totalCashCell.replace(/[,$]/g, ''))))
+            );
+
+            if (isHeaderRow) {
+              console.log('Detected header row in Balance file - skipping first row');
+              processedData = processedData.slice(1); // Skip the header row
+            }
+          }
+
           const enhancedValidator = new EnhancedFileValidator();
-          const enhancedValidation = enhancedValidator.validateCsvData(results.data, detectedType);
-          const legacyValidation = validateFileData(results.data, detectedType);
-          const extracted = extractRequiredColumnsFromArray(results.data, detectedType);
+          const enhancedValidation = enhancedValidator.validateCsvData(processedData, detectedType);
+          const legacyValidation = validateFileData(processedData, detectedType);
+          const extracted = extractRequiredColumnsFromArray(processedData, detectedType);
 
           setState(prev => ({
             ...prev,

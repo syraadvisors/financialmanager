@@ -247,6 +247,7 @@ self.onmessage = function(e) {
               return;
             }
 
+            let processedData = results.data;
             const columnCount = results.data[0].length;
             const fileType = detectFileTypeByColumnCount(columnCount);
 
@@ -258,18 +259,38 @@ self.onmessage = function(e) {
               return;
             }
 
+            // Balance files have header rows, Position files do not
+            // Check if first row is a header (contains text in columns that should be numeric)
+            if (fileType === 'ACCOUNT_BALANCE' && processedData.length > 0) {
+              const firstRow = processedData[0];
+              // Check if portfolio value column (index 4) or total cash column (index 6) contains non-numeric text
+              const portfolioValueCell = (firstRow[4] || '').toString().trim();
+              const totalCashCell = (firstRow[6] || '').toString().trim();
+
+              // If these cells contain text that doesn't parse to a number, it's likely a header row
+              const isHeaderRow = (
+                (portfolioValueCell && isNaN(parseFloat(portfolioValueCell.replace(/[,$]/g, '')))) ||
+                (totalCashCell && isNaN(parseFloat(totalCashCell.replace(/[,$]/g, ''))))
+              );
+
+              if (isHeaderRow) {
+                console.log('Worker: Detected header row in Balance file - skipping first row');
+                processedData = processedData.slice(1); // Skip the header row
+              }
+            }
+
             self.postMessage({
               type: 'parsing_complete',
               result: {
-                data: results.data,
+                data: processedData,
                 fileType,
                 columnCount,
-                rowCount: results.data.length
+                rowCount: processedData.length
               }
             });
 
             // Start validation
-            validateData(results.data, fileType);
+            validateData(processedData, fileType);
           },
           header: false,
           skipEmptyLines: true,

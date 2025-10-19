@@ -199,6 +199,7 @@ const AppContent: React.FC = () => {
       case PageType.HOUSEHOLDS:
       case PageType.RELATIONSHIPS:
       case PageType.FEE_SCHEDULES:
+      case PageType.BILLING_FEE_AGREEMENTS:
       case PageType.BILLING_PERIODS:
       case PageType.FEE_REPORTS:
         return (
@@ -210,6 +211,7 @@ const AppContent: React.FC = () => {
             state.currentPage === PageType.HOUSEHOLDS ? 'households' :
             state.currentPage === PageType.RELATIONSHIPS ? 'relationships' :
             state.currentPage === PageType.FEE_SCHEDULES ? 'schedules' :
+            state.currentPage === PageType.BILLING_FEE_AGREEMENTS ? 'agreements' :
             state.currentPage === PageType.BILLING_PERIODS ? 'billing' :
             state.currentPage === PageType.FEE_REPORTS ? 'reports' : 'calculator'
           } />

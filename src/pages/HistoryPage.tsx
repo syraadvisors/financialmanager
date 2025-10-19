@@ -27,7 +27,7 @@ const HistoryPage: React.FC<HistoryPageProps> = () => {
 
   const { fileHistory } = state;
 
-  // Convert fileHistory to HistoryEntry format and add mock export entries for demo
+  // Convert fileHistory to HistoryEntry format
   const allHistory = useMemo(() => {
     const importHistory: HistoryEntry[] = fileHistory.map(entry => ({
       ...entry,
@@ -35,29 +35,7 @@ const HistoryPage: React.FC<HistoryPageProps> = () => {
       action: 'import' as const,
     }));
 
-    // Add some mock export history entries for demonstration
-    const mockExportHistory: HistoryEntry[] = [
-      {
-        id: 'export-1',
-        fileName: 'portfolio_export_2024_01_15.csv',
-        fileType: FileType.ACCOUNT_BALANCE,
-        importDate: new Date(Date.now() - 86400000).toLocaleString(), // 1 day ago
-        recordCount: 2150,
-        summary: { format: 'CSV', includeMetadata: true },
-        action: 'export',
-      },
-      {
-        id: 'export-2',
-        fileName: 'positions_data_2024_01_14.xlsx',
-        fileType: FileType.POSITIONS,
-        importDate: new Date(Date.now() - 172800000).toLocaleString(), // 2 days ago
-        recordCount: 8523,
-        summary: { format: 'Excel', includeMetadata: false },
-        action: 'export',
-      },
-    ];
-
-    return [...importHistory, ...mockExportHistory];
+    return importHistory;
   }, [fileHistory]);
 
   // Filter and sort history

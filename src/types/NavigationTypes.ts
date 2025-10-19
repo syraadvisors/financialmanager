@@ -14,6 +14,7 @@ export enum PageType {
   HOUSEHOLDS = 'households',
   RELATIONSHIPS = 'relationships',
   FEE_SCHEDULES = 'fee-schedules',
+  BILLING_FEE_AGREEMENTS = 'billing-fee-agreements',
   BILLING_PERIODS = 'billing-periods',
   FEE_REPORTS = 'fee-reports',
   SETTINGS = 'settings',
