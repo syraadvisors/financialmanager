@@ -33,7 +33,7 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
 
   // Column display name mapping
   const columnDisplayNames: Record<string, string> = {
-    asOfBusinessDate: 'Balance Date',
+    asOfBusinessDate: 'Date',
     accountNumber: 'Account Number',
     accountName: 'Account Name',
     netMarketValue: 'Net Market Value',
@@ -54,10 +54,19 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
     marginAccountBalanceEquityExcludingOptions: 'Balance Options',
     marginBuyingPower: 'Margin Buying Power',
     mtdMarginInterest: 'Mtd Margin Interest',
+    // Positions file columns
+    symbol: 'Symbol',
+    securityDescription: 'Fund Name',
+    numberOfShares: '# of Shares',
+    marketValue: 'Market Value',
+    securityType: 'Security Type',
+    price: 'Price',
   };
 
-  // Columns to display in preview
-  const previewColumns = ['asOfBusinessDate', 'accountNumber', 'accountName', 'portfolioValue', 'totalCash'];
+  // Columns to display in preview based on file type
+  const previewColumns = fileType === FileType.POSITIONS
+    ? ['asOfBusinessDate', 'accountNumber', 'accountName', 'symbol', 'securityDescription', 'numberOfShares', 'marketValue']
+    : ['asOfBusinessDate', 'accountNumber', 'accountName', 'portfolioValue', 'totalCash'];
 
   const getDisplayName = (key: string): string => {
     return columnDisplayNames[key] || key;
@@ -83,8 +92,8 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
       }
     }
 
-    // Format currency fields
-    if (key === 'portfolioValue' || key === 'totalCash') {
+    // Format currency fields (balance and positions)
+    if (key === 'portfolioValue' || key === 'totalCash' || key === 'marketValue') {
       const numValue = typeof value === 'number' ? value : parseFloat(value);
       if (!isNaN(numValue)) {
         return new Intl.NumberFormat('en-US', {
@@ -93,6 +102,17 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
         }).format(numValue);
+      }
+    }
+
+    // Format number of shares with commas
+    if (key === 'numberOfShares') {
+      const numValue = typeof value === 'number' ? value : parseFloat(value);
+      if (!isNaN(numValue)) {
+        return numValue.toLocaleString('en-US', {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 4,
+        });
       }
     }
 
