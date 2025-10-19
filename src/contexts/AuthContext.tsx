@@ -34,7 +34,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     sessionRef.current = session;
   }, [session]);
 
-  const loadUserProfile = async (userId: string) => {
+  const loadUserProfile = async (userId: string, sessionToUse?: Session | null) => {
     console.log('[AuthContext] loadUserProfile starting for userId:', userId);
     try {
       console.log('[AuthContext] Fetching profile via direct REST API...');
@@ -43,11 +43,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Even though the database query executes in <1ms in SQL Editor, the JS client hangs for 10s
       // Solution: Bypass the Supabase JS client and use direct fetch to PostgREST API
 
-      // Use the session from ref to avoid hanging on supabase.auth.getSession()
-      const currentSession = sessionRef.current;
+      // Use the session from parameter if provided, otherwise use the ref
+      const currentSession = sessionToUse || sessionRef.current;
 
       if (!currentSession) {
-        console.error('[AuthContext] No session found in ref');
+        console.error('[AuthContext] No session found in ref or parameter');
         setUserProfile(null);
         return;
       }
@@ -231,7 +231,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(session?.user ?? null);
 
       if (session?.user) {
-        await loadUserProfile(session.user.id);
+        await loadUserProfile(session.user.id, session);
       }
 
       setLoading(false);
@@ -243,7 +243,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(session?.user ?? null);
 
       if (session?.user) {
-        await loadUserProfile(session.user.id);
+        await loadUserProfile(session.user.id, session);
       } else {
         setUserProfile(null);
       }
