@@ -255,8 +255,32 @@ self.onmessage = function(e) {
             }
 
             let processedData = results.data;
-            const columnCount = results.data[0].length;
+
+            // Get the actual column count, ignoring trailing empty columns
+            // This handles CSV files with trailing commas
+            let actualColumnCount = results.data[0].length;
+            const firstRow = results.data[0];
+
+            // Count backwards from the end to find the last non-empty column
+            for (let i = firstRow.length - 1; i >= 0; i--) {
+              const value = (firstRow[i] || '').toString().trim();
+              if (value !== '') {
+                actualColumnCount = i + 1;
+                break;
+              }
+              // If we reach a point where we've only seen empty columns, reduce the count
+              if (i < firstRow.length - 1 && value === '') {
+                actualColumnCount = i + 1;
+              }
+            }
+
+            const columnCount = actualColumnCount;
             const fileType = detectFileTypeByColumnCount(columnCount);
+
+            console.log('CSV Worker - Raw column count:', results.data[0].length);
+            console.log('CSV Worker - Actual column count (excluding trailing empty):', columnCount);
+            console.log('CSV Worker - Detected file type:', fileType);
+            console.log('CSV Worker - First row sample:', results.data[0].slice(0, 5));
 
             if (fileType === 'UNKNOWN') {
               self.postMessage({

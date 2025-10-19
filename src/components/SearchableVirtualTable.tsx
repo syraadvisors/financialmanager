@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react';
-import { List } from 'react-window';
+// react-window removed due to React 19 compatibility issues
 import { SortAsc, SortDesc, Search, Navigation } from 'lucide-react';
 import { useSearchContext } from '../contexts/SearchContext';
 import { HighlightedText } from '../utils/textHighlighting';
@@ -660,19 +660,29 @@ const SearchableVirtualTable = <T extends any>({
         ))}
       </div>
 
-      {/* Virtual List */}
+      {/* Scrollable List */}
       {data && data.length > 0 && itemData ? (
-        <List
+        <div
           ref={listRef}
-          height={height - 50 - (searchResultsSummary ? 32 : 0)}
-          width={totalWidth}
-          itemCount={data.length}
-          itemSize={rowHeight}
-          overscanCount={overscanCount}
-          itemData={itemData}
+          style={{
+            height: height - 50 - (searchResultsSummary ? 32 : 0),
+            width: totalWidth,
+            overflow: 'auto',
+            minWidth: totalWidth,
+          }}
         >
-          {VirtualizedRow}
-        </List>
+          {data.map((item, index) => (
+            <VirtualizedRow
+              key={index}
+              index={index}
+              style={{
+                height: rowHeight,
+                minWidth: totalWidth,
+              }}
+              data={itemData}
+            />
+          ))}
+        </div>
       ) : (
         <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
           {!itemData ? 'Loading table data...' : 'No data to display'}

@@ -65,7 +65,7 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
 
   // Columns to display in preview based on file type
   const previewColumns = fileType === FileType.POSITIONS
-    ? ['asOfBusinessDate', 'accountNumber', 'accountName', 'symbol', 'securityDescription', 'numberOfShares', 'marketValue']
+    ? ['asOfBusinessDate', 'accountNumber', 'accountName', 'symbol', 'securityDescription', 'numberOfShares', 'price', 'marketValue']
     : ['asOfBusinessDate', 'accountNumber', 'accountName', 'portfolioValue', 'totalCash'];
 
   const getDisplayName = (key: string): string => {
@@ -93,7 +93,7 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
     }
 
     // Format currency fields (balance and positions)
-    if (key === 'portfolioValue' || key === 'totalCash' || key === 'marketValue') {
+    if (key === 'portfolioValue' || key === 'totalCash' || key === 'marketValue' || key === 'price') {
       const numValue = typeof value === 'number' ? value : parseFloat(value);
       if (!isNaN(numValue)) {
         return new Intl.NumberFormat('en-US', {

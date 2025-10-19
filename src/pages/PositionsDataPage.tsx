@@ -30,9 +30,46 @@ const PositionsDataPage: React.FC<PositionsDataPageProps> = memo(({ onExportData
 
   const { positionsData } = state;
 
+  // Add console logging to debug data structure
+  console.log('[PositionsDataPage] positionsData length:', positionsData?.length);
+  console.log('[PositionsDataPage] first position:', positionsData?.[0]);
+
+  // Safety check: ensure positionsData is an array
+  if (!Array.isArray(positionsData)) {
+    console.error('[PositionsDataPage] ERROR: positionsData is not an array!', typeof positionsData, positionsData);
+    return (
+      <div style={{
+        padding: '32px',
+        backgroundColor: '#fafafa',
+        minHeight: '100vh',
+      }}>
+        <div style={{
+          textAlign: 'center',
+          padding: '64px 32px',
+          backgroundColor: 'white',
+          borderRadius: '8px',
+          border: '1px solid #ffcdd2',
+        }}>
+          <TrendingUp size={64} style={{ color: '#f44336', marginBottom: '16px' }} />
+          <h2 style={{ color: '#d32f2f', marginBottom: '8px' }}>Data Structure Error</h2>
+          <p style={{ color: '#999' }}>
+            The positions data is not in the correct format. Please try re-importing the file.
+          </p>
+          <p style={{ color: '#666', fontSize: '12px', marginTop: '16px' }}>
+            Expected an array but got: {typeof positionsData}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // Get unique security types for filter
   const securityTypes = useMemo(() => {
-    const types = new Set(positionsData.map(pos => pos.securityType).filter(Boolean));
+    if (!Array.isArray(positionsData)) {
+      console.error('[PositionsDataPage] positionsData is not an array:', positionsData);
+      return [];
+    }
+    const types = new Set(positionsData.map(pos => pos?.securityType).filter(Boolean));
     return Array.from(types).sort();
   }, [positionsData]);
 
@@ -425,17 +462,30 @@ const PositionsDataPage: React.FC<PositionsDataPageProps> = memo(({ onExportData
         {useVirtualScrolling ? (
           /* Virtual Scrolling Table */
           <Suspense fallback={<LoadingSkeleton type="table" count={10} />}>
-            <VirtualScrollTable
-              data={processedData}
-              columns={virtualColumns}
-              height={600}
-              rowHeight={44}
-              showAllColumns={showAllColumns}
-              sortField={sortField}
-              sortDirection={sortDirection}
-              onSort={handleVirtualSort}
-              className="positions-virtual-table"
-            />
+            {processedData && processedData.length > 0 ? (
+              <VirtualScrollTable
+                data={processedData}
+                columns={virtualColumns}
+                height={600}
+                rowHeight={44}
+                showAllColumns={showAllColumns}
+                sortField={sortField}
+                sortDirection={sortDirection}
+                onSort={handleVirtualSort}
+                className="positions-virtual-table"
+              />
+            ) : (
+              <div style={{
+                background: 'white',
+                padding: '40px',
+                borderRadius: '8px',
+                border: '1px solid #e0e0e0',
+                textAlign: 'center',
+                color: '#666'
+              }}>
+                No data to display after filtering
+              </div>
+            )}
           </Suspense>
         ) : (
           /* Traditional Paginated Table */

@@ -1,5 +1,4 @@
-import React, { useMemo, useCallback, useRef } from 'react';
-import { List } from 'react-window';
+import React, { useMemo, useCallback } from 'react';
 import { SortAsc, SortDesc } from 'lucide-react';
 import LoadingSkeleton from './LoadingSkeleton';
 
@@ -28,12 +27,6 @@ export interface VirtualTableProps<T = any> {
   overscanCount?: number;
 }
 
-interface RowData<T> {
-  items: T[];
-  columns: VirtualTableColumn<T>[];
-  onRowClick?: (row: T, index: number) => void;
-}
-
 const VirtualScrollTable = <T extends any>({
   data,
   columns,
@@ -46,9 +39,12 @@ const VirtualScrollTable = <T extends any>({
   onRowClick,
   loading = false,
   className = '',
-  overscanCount = 5,
 }: VirtualTableProps<T>): React.JSX.Element => {
-  const listRef = useRef<any>(null);
+  console.log('[VirtualScrollTable] Rendering with data:', {
+    dataLength: data?.length,
+    isArray: Array.isArray(data),
+    firstItem: data?.[0]
+  });
 
   // Filter columns based on showAllColumns
   const visibleColumns = useMemo(() => {
@@ -60,67 +56,9 @@ const VirtualScrollTable = <T extends any>({
     return visibleColumns.reduce((sum, col) => sum + col.width, 0);
   }, [visibleColumns]);
 
-  // Memoized row data to prevent unnecessary re-renders
-  const rowData = useMemo<RowData<T>>(() => ({
-    items: data,
-    columns: visibleColumns,
-    onRowClick,
-  }), [data, visibleColumns, onRowClick]);
-
-  // Row renderer component - compatible with react-window v2.1.1
-  const Row = useCallback(({ index, style }: { index: number; style: React.CSSProperties }) => {
-    const { items, columns, onRowClick } = rowData;
-    const item = items[index];
-
-    const handleClick = () => {
-      if (onRowClick) {
-        onRowClick(item, index);
-      }
-    };
-
-    return (
-      <div
-        style={{
-          ...style,
-          display: 'flex',
-          alignItems: 'center',
-          borderBottom: '1px solid #e0e0e0',
-          backgroundColor: index % 2 === 0 ? 'white' : '#fafafa',
-          cursor: onRowClick ? 'pointer' : 'default',
-        }}
-        onClick={handleClick}
-      >
-        {columns.map((column: VirtualTableColumn<T>, colIndex: number) => {
-          const value = item[column.key];
-          const displayValue = column.formatter ? column.formatter(value, item) : value;
-
-          return (
-            <div
-              key={`${column.key as string}-${colIndex}`}
-              style={{
-                width: column.width,
-                padding: '8px 12px',
-                textAlign: column.align || 'left',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                fontSize: '14px',
-                color: '#333',
-              }}
-              title={typeof value === 'string' ? value : String(value)}
-            >
-              {displayValue as React.ReactNode}
-            </div>
-          );
-        })}
-      </div>
-    );
-  }, [rowData]);
-
   // Handle sorting
   const handleSort = useCallback((field: string) => {
     if (!onSort) return;
-
     const newDirection = sortField === field && sortDirection === 'asc' ? 'desc' : 'asc';
     onSort(field, newDirection);
   }, [sortField, sortDirection, onSort]);
@@ -139,7 +77,7 @@ const VirtualScrollTable = <T extends any>({
   }
 
   // Empty state
-  if (data.length === 0) {
+  if (!data || data.length === 0) {
     return (
       <div
         className={className}
@@ -180,6 +118,7 @@ const VirtualScrollTable = <T extends any>({
           position: 'sticky',
           top: 0,
           zIndex: 10,
+          minWidth: totalWidth,
         }}
       >
         {visibleColumns.map((column) => (
@@ -207,17 +146,54 @@ const VirtualScrollTable = <T extends any>({
         ))}
       </div>
 
-      {/* Virtual List */}
-      <List
-        ref={listRef}
-        height={height - 50}
-        width={totalWidth}
-        itemCount={data.length}
-        itemSize={rowHeight}
-        overscanCount={overscanCount}
+      {/* Scrollable Body */}
+      <div
+        style={{
+          height: height - 50,
+          overflow: 'auto',
+          minWidth: totalWidth,
+        }}
       >
-        {Row}
-      </List>
+        {data.map((item, index) => (
+          <div
+            key={index}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              borderBottom: '1px solid #e0e0e0',
+              backgroundColor: index % 2 === 0 ? 'white' : '#fafafa',
+              cursor: onRowClick ? 'pointer' : 'default',
+              height: rowHeight,
+              minWidth: totalWidth,
+            }}
+            onClick={() => onRowClick && onRowClick(item, index)}
+          >
+            {visibleColumns.map((column, colIndex) => {
+              const value = item[column.key];
+              const displayValue = column.formatter ? column.formatter(value, item) : value;
+
+              return (
+                <div
+                  key={`${column.key as string}-${colIndex}`}
+                  style={{
+                    width: column.width,
+                    padding: '8px 12px',
+                    textAlign: column.align || 'left',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    fontSize: '14px',
+                    color: '#333',
+                  }}
+                  title={typeof value === 'string' ? value : String(value || '')}
+                >
+                  {displayValue as React.ReactNode}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
 
       {/* Footer with row count */}
       <div
@@ -238,7 +214,6 @@ const VirtualScrollTable = <T extends any>({
 
 // Performance utilities
 export const createVirtualTableHelpers = <T extends any>() => {
-  // Data sorter
   const sortData = (
     data: T[],
     field: keyof T,
@@ -255,15 +230,10 @@ export const createVirtualTableHelpers = <T extends any>() => {
       const aStr = String(aValue || '').toLowerCase();
       const bStr = String(bValue || '').toLowerCase();
 
-      if (direction === 'asc') {
-        return aStr.localeCompare(bStr);
-      } else {
-        return bStr.localeCompare(aStr);
-      }
+      return direction === 'asc' ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
     });
   };
 
-  // Data filter
   const filterData = (
     data: T[],
     filters: Partial<Record<keyof T, any>>
@@ -271,47 +241,16 @@ export const createVirtualTableHelpers = <T extends any>() => {
     return data.filter(item => {
       return Object.entries(filters).every(([key, value]) => {
         if (!value) return true;
-
         const itemValue = item[key as keyof T];
         if (typeof itemValue === 'string' && typeof value === 'string') {
           return itemValue.toLowerCase().includes(value.toLowerCase());
         }
-
         return itemValue === value;
       });
     });
   };
 
-  // Batch update utility for performance
-  const createBatchUpdater = (
-    setState: React.Dispatch<React.SetStateAction<any>>,
-    delay: number = 16
-  ) => {
-    let timeoutId: NodeJS.Timeout;
-    let pendingUpdates: (() => void)[] = [];
-
-    return (updateFn: () => void) => {
-      pendingUpdates.push(updateFn);
-
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        setState((prev: any) => {
-          let newState = prev;
-          pendingUpdates.forEach(update => {
-            update();
-          });
-          pendingUpdates = [];
-          return newState;
-        });
-      }, delay);
-    };
-  };
-
-  return {
-    sortData,
-    filterData,
-    createBatchUpdater,
-  };
+  return { sortData, filterData };
 };
 
 // Format helpers for common data types

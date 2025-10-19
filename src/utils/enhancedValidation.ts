@@ -233,7 +233,16 @@ export class EnhancedFileValidator {
     const columnCounts = new Map<number, number>();
 
     data.forEach((row, index) => {
-      const colCount = Array.isArray(row) ? row.length : 0;
+      // Handle both array format (raw CSV) and object format (extracted columns)
+      let colCount: number;
+      if (Array.isArray(row)) {
+        colCount = row.length;
+      } else if (typeof row === 'object' && row !== null) {
+        // For objects, count non-empty properties
+        colCount = Object.keys(row).filter(key => row[key] !== '' && row[key] !== null && row[key] !== undefined).length;
+      } else {
+        colCount = 0;
+      }
       columnCounts.set(colCount, (columnCounts.get(colCount) || 0) + 1);
 
       // Only warn if column count doesn't match expected AND it's not zero (empty row)
@@ -292,29 +301,60 @@ export class EnhancedFileValidator {
       negativeValues: 0
     };
 
-    data.forEach((row, index) => {
+    data.forEach((rowData, index) => {
       const rowNum = index + 1;
       let rowValid = true;
       let rowCorrupted = false;
 
-      if (!Array.isArray(row)) {
+      // Handle both array format (raw CSV) and object format (extracted columns)
+      let rowArray: any[];
+      if (Array.isArray(rowData)) {
+        rowArray = rowData;
+        // Pad row if needed
+        while (rowArray.length < (fileType === FileType.ACCOUNT_BALANCE ? APP_CONFIG.FILE.BALANCE_FILE_COLUMNS : APP_CONFIG.FILE.POSITIONS_FILE_COLUMNS)) {
+          rowArray.push('');
+        }
+      } else if (typeof rowData === 'object' && rowData !== null) {
+        // Convert extracted object format back to array for validation
+        if (fileType === FileType.ACCOUNT_BALANCE) {
+          rowArray = [
+            rowData.asOfBusinessDate || '',
+            rowData.accountNumber || '',
+            rowData.accountName || '',
+            '', // column 3
+            rowData.portfolioValue || 0,
+            '', // column 5
+            rowData.totalCash || 0
+          ];
+        } else {
+          rowArray = [
+            rowData.asOfBusinessDate || '',
+            rowData.accountNumber || '',
+            rowData.accountName || '',
+            rowData.symbol || '',
+            rowData.securityType || '',
+            rowData.securityDescription || '',
+            rowData.accountingRuleCode || '',
+            rowData.numberOfShares || 0,
+            rowData.longShort || '',
+            rowData.price || 0,
+            rowData.dateOfPrice || '',
+            rowData.marketValue || 0
+          ];
+        }
+      } else {
         errors.push({
           type: 'data',
           row: rowNum,
-          message: 'Row is not an array',
+          message: 'Row is not an array or object',
           suggestion: 'Check CSV parsing'
         });
         corruptedRows++;
         return;
       }
 
-      // Pad row if needed
-      while (row.length < (fileType === FileType.ACCOUNT_BALANCE ? APP_CONFIG.FILE.BALANCE_FILE_COLUMNS : APP_CONFIG.FILE.POSITIONS_FILE_COLUMNS)) {
-        row.push('');
-      }
-
       // Account number validation with enhanced checks
-      const accountNumber = (row[1] || '').toString().trim();
+      const accountNumber = (rowArray[1] || '').toString().trim();
       if (!accountNumber) {
         warnings.push({
           type: 'data_quality',
@@ -336,7 +376,7 @@ export class EnhancedFileValidator {
       }
 
       // Date validation with format detection
-      const dateValue = (row[0] || '').toString().trim();
+      const dateValue = (rowArray[0] || '').toString().trim();
       if (dateValue) {
         const dateValidation = this.validateDateEnhanced(dateValue, rowNum);
         if (dateValidation.valid) {
@@ -350,7 +390,7 @@ export class EnhancedFileValidator {
 
       // Type-specific validation
       if (fileType === FileType.ACCOUNT_BALANCE) {
-        const balanceValidation = this.validateBalanceRow(row, rowNum);
+        const balanceValidation = this.validateBalanceRow(rowArray, rowNum);
         if (!balanceValidation.valid) {
           errors.push(...balanceValidation.errors);
           warnings.push(...balanceValidation.warnings);
@@ -358,7 +398,7 @@ export class EnhancedFileValidator {
           rowValid = false;
         }
       } else if (fileType === FileType.POSITIONS) {
-        const positionValidation = this.validatePositionRow(row, rowNum);
+        const positionValidation = this.validatePositionRow(rowArray, rowNum);
         if (!positionValidation.valid) {
           errors.push(...positionValidation.errors);
           warnings.push(...positionValidation.warnings);
@@ -368,7 +408,7 @@ export class EnhancedFileValidator {
       }
 
       // Check for suspicious patterns
-      const rowString = row.join(',');
+      const rowString = rowArray.join(',');
       suspiciousPatterns.repeatingData.set(rowString, (suspiciousPatterns.repeatingData.get(rowString) || 0) + 1);
 
       if (rowValid) {
