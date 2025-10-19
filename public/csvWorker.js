@@ -43,17 +43,24 @@ const COLUMN_MAPPINGS = {
 
 // Utility functions - more flexible file type detection
 function detectFileTypeByColumnCount(columnCount) {
-  // More flexible detection - allow files with fewer columns than expected
-  // Balance files typically have 21 columns, but we only need specific ones
-  if (columnCount >= FILE_CONFIG.MIN_BALANCE_COLUMNS && columnCount <= FILE_CONFIG.BALANCE_FILE_COLUMNS) {
+  // Positions files typically have exactly 12 columns
+  // Balance files typically have 21 columns
+  // Check for positions first since it's more specific
+
+  if (columnCount === FILE_CONFIG.POSITIONS_FILE_COLUMNS) {
+    // Exactly 12 columns = positions file
+    return 'POSITIONS';
+  }
+  else if (columnCount >= FILE_CONFIG.MIN_BALANCE_COLUMNS && columnCount <= FILE_CONFIG.BALANCE_FILE_COLUMNS && columnCount > FILE_CONFIG.POSITIONS_FILE_COLUMNS) {
+    // 13-21 columns = balance file
     return 'ACCOUNT_BALANCE';
   }
-  // Positions files typically have 12 columns, but we only need specific ones
-  else if (columnCount >= FILE_CONFIG.MIN_POSITIONS_COLUMNS && columnCount <= FILE_CONFIG.POSITIONS_FILE_COLUMNS) {
+  else if (columnCount >= FILE_CONFIG.MIN_POSITIONS_COLUMNS && columnCount < FILE_CONFIG.POSITIONS_FILE_COLUMNS) {
+    // 5-11 columns = positions file (partial/missing columns)
     return 'POSITIONS';
   }
 
-  // If ambiguous, try to detect based on common patterns
+  // If still ambiguous, use the old fallback logic
   // Positions files usually have fewer columns than balance files
   if (columnCount <= 12) {
     return 'POSITIONS';
@@ -259,22 +266,42 @@ self.onmessage = function(e) {
               return;
             }
 
-            // Balance files have header rows, Position files do not
             // Check if first row is a header (contains text in columns that should be numeric)
-            if (fileType === 'ACCOUNT_BALANCE' && processedData.length > 0) {
+            if (processedData.length > 0) {
               const firstRow = processedData[0];
-              // Check if portfolio value column (index 4) or total cash column (index 6) contains non-numeric text
-              const portfolioValueCell = (firstRow[4] || '').toString().trim();
-              const totalCashCell = (firstRow[6] || '').toString().trim();
+              let isHeaderRow = false;
 
-              // If these cells contain text that doesn't parse to a number, it's likely a header row
-              const isHeaderRow = (
-                (portfolioValueCell && isNaN(parseFloat(portfolioValueCell.replace(/[,$]/g, '')))) ||
-                (totalCashCell && isNaN(parseFloat(totalCashCell.replace(/[,$]/g, ''))))
-              );
+              if (fileType === 'ACCOUNT_BALANCE') {
+                // Check if portfolio value column (index 4) or total cash column (index 6) contains non-numeric text
+                const portfolioValueCell = (firstRow[4] || '').toString().trim();
+                const totalCashCell = (firstRow[6] || '').toString().trim();
+
+                // If these cells contain text that doesn't parse to a number, it's likely a header row
+                isHeaderRow = (
+                  (portfolioValueCell && isNaN(parseFloat(portfolioValueCell.replace(/[,$]/g, '')))) ||
+                  (totalCashCell && isNaN(parseFloat(totalCashCell.replace(/[,$]/g, ''))))
+                );
+
+                if (isHeaderRow) {
+                  console.log('Worker: Detected header row in Balance file - skipping first row');
+                }
+              } else if (fileType === 'POSITIONS') {
+                // Check if number of shares column (index 7) or market value column (index 11) contains non-numeric text
+                const sharesCell = (firstRow[7] || '').toString().trim();
+                const marketValueCell = (firstRow[11] || '').toString().trim();
+
+                // If these cells contain text that doesn't parse to a number, it's likely a header row
+                isHeaderRow = (
+                  (sharesCell && isNaN(parseFloat(sharesCell.replace(/[,]/g, '')))) ||
+                  (marketValueCell && isNaN(parseFloat(marketValueCell.replace(/[,$]/g, ''))))
+                );
+
+                if (isHeaderRow) {
+                  console.log('Worker: Detected header row in Positions file - skipping first row');
+                }
+              }
 
               if (isHeaderRow) {
-                console.log('Worker: Detected header row in Balance file - skipping first row');
                 processedData = processedData.slice(1); // Skip the header row
               }
             }
