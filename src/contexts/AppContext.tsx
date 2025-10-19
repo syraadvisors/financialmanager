@@ -350,7 +350,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
     // Create file history entry
     const historyEntry: FileHistoryEntry = {
       id: Date.now().toString(),
-      fileName: fileName || `${fileType.toLowerCase()}_data.csv`,
+      fileName: fileName || `${fileType?.toLowerCase() || 'unknown'}_data.csv`,
       fileType: fileType,
       importDate: timestamp,
       recordCount: data.length,
