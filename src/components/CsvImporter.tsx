@@ -200,7 +200,7 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
       >
         <input {...getInputProps()} />
         <Upload size={48} style={{ margin: '0 auto', color: '#666' }} />
-        <p style={{ marginTop: '12px', fontSize: '16px' }}>
+        <div style={{ marginTop: '12px', fontSize: '16px' }}>
           {isProcessing
             ? (
               <div>
@@ -232,7 +232,7 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
             : isDragActive
             ? 'Drop the CSV file here...'
             : 'Drag and drop a Balance or Positions CSV file here, or click to select'}
-        </p>
+        </div>
 
         {!isProcessing && (
           <div style={{
