@@ -123,11 +123,13 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
 
     switch (requiresData) {
       case 'balance':
-        return hasBalance;
+        // Always enable if user is authenticated - data pages now load from database
+        return user !== null || hasBalance;
       case 'positions':
-        return hasPositions;
+        // Always enable if user is authenticated - data pages now load from database
+        return user !== null || hasPositions;
       case 'both':
-        return hasBalance && hasPositions;
+        return user !== null || (hasBalance && hasPositions);
       case 'none':
       default:
         return true;

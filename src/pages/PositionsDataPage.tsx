@@ -170,22 +170,28 @@ const PositionsDataPage: React.FC<PositionsDataPageProps> = memo(({ onExportData
   }, [sortField, sortDirection]);
 
   // Virtual table columns with formatters
+  // Columns match preview: asOfBusinessDate, accountNumber, accountName, symbol, securityDescription, numberOfShares, price, marketValue
   const virtualColumns: VirtualTableColumn[] = [
-    { key: 'accountNumber', label: 'Account', width: 120, sortable: true, essential: true },
-    { key: 'symbol', label: 'Symbol', width: 100, sortable: true, essential: true },
+    {
+      key: 'asOfBusinessDate',
+      label: 'Date',
+      sortable: true,
+      essential: true,
+      formatter: formatters.date
+    },
+    { key: 'accountNumber', label: 'Account #', sortable: true, essential: true },
+    { key: 'accountName', label: 'Account Name', sortable: true, essential: true },
+    { key: 'symbol', label: 'Symbol', sortable: true, essential: true },
     {
       key: 'securityDescription',
       label: 'Description',
-      width: 200,
       sortable: true,
-      essential: false,
-      formatter: (value: string) => formatters.truncate(value, 25)
+      essential: true,
+      formatter: (value: string) => formatters.truncate(value, 30)
     },
-    { key: 'securityType', label: 'Type', width: 100, sortable: true, essential: true },
     {
       key: 'numberOfShares',
       label: 'Shares',
-      width: 120,
       sortable: true,
       essential: true,
       align: 'right',
@@ -194,7 +200,6 @@ const PositionsDataPage: React.FC<PositionsDataPageProps> = memo(({ onExportData
     {
       key: 'price',
       label: 'Price',
-      width: 100,
       sortable: true,
       essential: true,
       align: 'right',
@@ -203,17 +208,17 @@ const PositionsDataPage: React.FC<PositionsDataPageProps> = memo(({ onExportData
     {
       key: 'marketValue',
       label: 'Market Value',
-      width: 140,
       sortable: true,
       essential: true,
       align: 'right',
       formatter: formatters.currency
     },
-    { key: 'longShort', label: 'L/S', width: 60, sortable: true, essential: false },
+    // Additional columns (not in preview)
+    { key: 'securityType', label: 'Type', sortable: true, essential: false },
+    { key: 'longShort', label: 'L/S', sortable: true, essential: false },
     {
       key: 'dateOfPrice',
       label: 'Price Date',
-      width: 100,
       sortable: true,
       essential: false,
       formatter: formatters.date

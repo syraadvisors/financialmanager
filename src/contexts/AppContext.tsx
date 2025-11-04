@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { FileType, AccountBalance, AccountPosition } from '../types/DataTypes';
 import { PageType } from '../types/NavigationTypes';
+import { importedBalanceDataService } from '../services/api/importedBalanceData.service';
+import { importedPositionsDataService } from '../services/api/importedPositionsData.service';
+import { useAuth } from './AuthContext';
 
 // Extended interface for file history with better typing
 export interface FileHistoryEntry {
@@ -228,6 +231,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
   enablePersistence = true
 }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
+  const { userProfile } = useAuth();
 
   // Load state from localStorage on mount
   useEffect(() => {
@@ -336,8 +340,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({
     dispatch({ type: 'RESTORE_STATE', payload: newState });
   };
 
-  // Enhanced data import handler
-  const handleDataImported = (data: any[], fileType: FileType, summary: any, fileName?: string) => {
+  // Enhanced data import handler with database integration
+  const handleDataImported = async (data: any[], fileType: FileType, summary: any, fileName?: string) => {
     console.log('[AppContext] handleDataImported called with:', {
       dataLength: data?.length,
       fileType,
@@ -360,7 +364,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
     // Add to history
     addFileHistory(historyEntry);
 
-    // Update appropriate data
+    // Update appropriate data in state (for immediate UI display)
     if (fileType === FileType.ACCOUNT_BALANCE) {
       console.log('[AppContext] Setting balance data with', data.length, 'rows');
       setBalanceData(data);
@@ -378,6 +382,49 @@ export const AppProvider: React.FC<AppProviderProps> = ({
 
     // Clear any previous errors
     setError(null);
+
+    // Save to database if user is authenticated
+    if (userProfile?.firmId) {
+      console.log('[AppContext] Saving imported data to database for firm:', userProfile.firmId);
+      try {
+        if (fileType === FileType.ACCOUNT_BALANCE) {
+          const result = await importedBalanceDataService.bulkImport(
+            data as AccountBalance[],
+            historyEntry.fileName,
+            userProfile.firmId
+          );
+          if (result.success) {
+            console.log('[AppContext] Successfully saved balance data to database:', {
+              batchId: result.importBatchId,
+              recordCount: result.recordsImported
+            });
+          } else {
+            console.error('[AppContext] Failed to save balance data to database:', result.error);
+            setError(`Warning: Data displayed but not saved to database: ${result.error}`);
+          }
+        } else if (fileType === FileType.POSITIONS) {
+          const result = await importedPositionsDataService.bulkImport(
+            data as AccountPosition[],
+            historyEntry.fileName,
+            userProfile.firmId
+          );
+          if (result.success) {
+            console.log('[AppContext] Successfully saved positions data to database:', {
+              batchId: result.importBatchId,
+              recordCount: result.recordsImported
+            });
+          } else {
+            console.error('[AppContext] Failed to save positions data to database:', result.error);
+            setError(`Warning: Data displayed but not saved to database: ${result.error}`);
+          }
+        }
+      } catch (err) {
+        console.error('[AppContext] Exception saving data to database:', err);
+        setError('Warning: Data displayed but not saved to database due to an error');
+      }
+    } else {
+      console.warn('[AppContext] User not authenticated or no firmId, skipping database save');
+    }
   };
 
   // Computed properties

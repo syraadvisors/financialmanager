@@ -1,7 +1,9 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import { Eye, EyeOff, Download, FileSpreadsheet, Database } from 'lucide-react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { Eye, EyeOff, Download, FileSpreadsheet, Database, Calendar } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { useSearchContext } from '../contexts/SearchContext';
+import { useAuth } from '../contexts/AuthContext';
+import { importedBalanceDataService } from '../services/api/importedBalanceData.service';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { DataProcessingErrorFallback } from '../components/ErrorFallbacks';
 import SearchableVirtualTable, { SearchableTableColumn } from '../components/SearchableVirtualTable';
@@ -15,19 +17,80 @@ interface EnhancedBalanceDataPageProps {
 const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExportData }) => {
   const { state: appState } = useAppContext();
   const { state: searchState, getFilteredData, isFiltering } = useSearchContext();
+  const { userProfile } = useAuth();
 
   const [sortField, setSortField] = useState<string>('accountNumber');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [showAllColumns, setShowAllColumns] = useState(false);
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [databaseData, setDatabaseData] = useState<any[]>([]);
+  const [isLoadingDates, setIsLoadingDates] = useState(true);
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
   const { balanceData } = appState;
 
+  // Load available dates on mount
+  useEffect(() => {
+    const loadAvailableDates = async () => {
+      if (!userProfile?.firmId) {
+        setIsLoadingDates(false);
+        return;
+      }
+
+      setIsLoadingDates(true);
+      const response = await importedBalanceDataService.getAvailableDates(userProfile.firmId);
+
+      if (response.data) {
+        setAvailableDates(response.data);
+        // Auto-select the most recent date
+        if (response.data.length > 0) {
+          setSelectedDate(response.data[0]);
+        }
+      }
+      setIsLoadingDates(false);
+    };
+
+    loadAvailableDates();
+  }, [userProfile?.firmId]);
+
+  // Load data for selected date
+  useEffect(() => {
+    const loadDataForDate = async () => {
+      if (!selectedDate || !userProfile?.firmId) {
+        setDatabaseData([]);
+        return;
+      }
+
+      setIsLoadingData(true);
+      const response = await importedBalanceDataService.getByDate(userProfile.firmId, selectedDate);
+
+      if (response.data) {
+        setDatabaseData(response.data);
+      } else {
+        setDatabaseData([]);
+      }
+      setIsLoadingData(false);
+    };
+
+    loadDataForDate();
+  }, [selectedDate, userProfile?.firmId]);
+
   // Define table columns with search capabilities
+  // Columns match preview: asOfBusinessDate, accountNumber, accountName, portfolioValue, totalCash
   const columns: SearchableTableColumn[] = [
     {
+      key: 'asOfBusinessDate',
+      label: 'Date',
+      width: 120,
+      sortable: true,
+      essential: true,
+      formatter: (value) => formatters.date(value),
+    },
+    {
       key: 'accountNumber',
-      label: 'Account Number',
-      width: 140,
+      label: 'Account #',
+      width: 150,
       sortable: true,
       essential: true,
       searchable: true,
@@ -43,7 +106,7 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
     {
       key: 'portfolioValue',
       label: 'Portfolio Value',
-      width: 140,
+      width: 150,
       sortable: true,
       essential: true,
       align: 'right',
@@ -52,7 +115,7 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
     {
       key: 'totalCash',
       label: 'Total Cash',
-      width: 120,
+      width: 150,
       sortable: true,
       essential: true,
       align: 'right',
@@ -109,7 +172,9 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
 
   // Get data based on search/filter state
   const displayData = useMemo(() => {
-    let data = balanceData;
+    // Use database data if a date is selected, otherwise use state data
+    const sourceData = selectedDate ? databaseData : balanceData;
+    let data = sourceData;
 
     // Apply search results if there's a global search with actual query
     if (searchState.globalQuery && searchState.globalQuery.trim()) {
@@ -131,6 +196,8 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
 
     return data;
   }, [
+    selectedDate,
+    databaseData,
     balanceData,
     searchState.globalQuery,
     searchState.globalResults.balanceData,
@@ -192,7 +259,7 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
     };
   }, [displayData]);
 
-  if (balanceData.length === 0) {
+  if (balanceData.length === 0 && databaseData.length === 0 && !isLoadingData) {
     return (
       <div style={{
         padding: '32px',
@@ -247,6 +314,46 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
 
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <UndoRedoControls variant="horizontal" size="small" showLabels={false} />
+
+          {/* Date Filter */}
+          {availableDates.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Calendar size={16} style={{ color: '#666' }} />
+              <select
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                disabled={isLoadingDates || isLoadingData}
+                style={{
+                  padding: '8px 12px',
+                  backgroundColor: 'white',
+                  color: '#333',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  minWidth: '150px',
+                }}
+              >
+                {availableDates.map((date) => {
+                  // Parse YYYY-MM-DD as local date to avoid timezone shift
+                  const [year, month, day] = date.split('-').map(Number);
+                  const localDate = new Date(year, month - 1, day);
+                  return (
+                    <option key={date} value={date}>
+                      {localDate.toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                      })}
+                    </option>
+                  );
+                })}
+              </select>
+              {isLoadingData && (
+                <span style={{ fontSize: '12px', color: '#666' }}>Loading...</span>
+              )}
+            </div>
+          )}
 
           <button
             onClick={() => setShowAllColumns(!showAllColumns)}

@@ -446,20 +446,26 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
                 ))}
               </ul>
               {validationResult.errors.length === 0 && (
-                <button
-                  onClick={proceedWithWarnings}
-                  style={{
-                    marginTop: '10px',
-                    padding: '8px 16px',
-                    backgroundColor: '#ff9800',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Proceed with Warnings
-                </button>
+                <>
+                  <div style={{ marginTop: '10px', fontSize: '14px', color: '#e65100' }}>
+                    <Info size={16} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                    Click "Proceed with Warnings" to import the data. It will then be available in the {fileType === FileType.POSITIONS ? 'Positions Data' : 'Balance Data'} tab.
+                  </div>
+                  <button
+                    onClick={proceedWithWarnings}
+                    style={{
+                      marginTop: '10px',
+                      padding: '8px 16px',
+                      backgroundColor: '#ff9800',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Proceed with Warnings
+                  </button>
+                </>
               )}
             </div>
           )}
@@ -472,6 +478,10 @@ const CsvImporter: React.FC<CsvImporterProps> = ({ onDataImported }) => {
             }}>
               <CheckCircle size={20} style={{ display: 'inline', marginRight: '8px', color: '#4caf50', verticalAlign: 'middle' }} />
               <span style={{ color: '#2e7d32', fontWeight: 'bold' }}>Validation successful!</span>
+              <div style={{ marginTop: '8px', fontSize: '14px', color: '#2e7d32' }}>
+                <Info size={16} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                Data has been imported and is now available in the {fileType === FileType.POSITIONS ? 'Positions Data' : 'Balance Data'} tab.
+              </div>
             </div>
           )}
         </div>

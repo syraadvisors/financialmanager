@@ -1,15 +1,18 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState, useRef, useEffect } from 'react';
 import { SortAsc, SortDesc } from 'lucide-react';
 import LoadingSkeleton from './LoadingSkeleton';
 
 export interface VirtualTableColumn<T = any> {
   key: keyof T;
   label: string;
-  width: number;
+  width?: number; // Made optional for auto-sizing
+  minWidth?: number;
+  maxWidth?: number;
   sortable?: boolean;
   essential?: boolean;
   formatter?: (value: any, row: T) => React.ReactNode;
   align?: 'left' | 'center' | 'right';
+  resizable?: boolean;
 }
 
 export interface VirtualTableProps<T = any> {
@@ -25,7 +28,54 @@ export interface VirtualTableProps<T = any> {
   loading?: boolean;
   className?: string;
   overscanCount?: number;
+  enableColumnResize?: boolean;
+  autoSizeColumns?: boolean;
 }
+
+// Helper function to calculate optimal column width based on content
+const calculateOptimalWidth = (
+  columnKey: string,
+  data: any[],
+  headerLabel: string,
+  formatter?: (value: any, row: any) => React.ReactNode,
+  minWidth: number = 100,
+  maxWidth: number = 500
+): number => {
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  if (!context) return 150;
+
+  context.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+  // Measure header
+  const headerWidth = context.measureText(headerLabel).width + 40; // padding + sort icon space
+
+  // Sample up to 100 rows for performance
+  const sampleSize = Math.min(100, data.length);
+  const step = Math.max(1, Math.floor(data.length / sampleSize));
+
+  let maxContentWidth = headerWidth;
+
+  for (let i = 0; i < data.length; i += step) {
+    const row = data[i];
+    const value = row[columnKey];
+    const displayValue = formatter ? formatter(value, row) : value;
+
+    // Extract text from React nodes if needed
+    let textValue = '';
+    if (typeof displayValue === 'object' && displayValue !== null && 'props' in displayValue) {
+      // If it's a React element, try to extract text from children
+      textValue = String(displayValue.props?.children || value || '');
+    } else {
+      textValue = String(displayValue || '');
+    }
+
+    const width = context.measureText(textValue).width + 40; // increased padding for better visibility
+    maxContentWidth = Math.max(maxContentWidth, width);
+  }
+
+  return Math.min(Math.max(maxContentWidth, minWidth), maxWidth);
+};
 
 const VirtualScrollTable = <T extends any>({
   data,
@@ -39,6 +89,8 @@ const VirtualScrollTable = <T extends any>({
   onRowClick,
   loading = false,
   className = '',
+  enableColumnResize = true,
+  autoSizeColumns = true,
 }: VirtualTableProps<T>): React.JSX.Element => {
   console.log('[VirtualScrollTable] Rendering with data:', {
     dataLength: data?.length,
@@ -51,10 +103,60 @@ const VirtualScrollTable = <T extends any>({
     return showAllColumns ? columns : columns.filter(col => col.essential !== false);
   }, [columns, showAllColumns]);
 
+  // Auto-size columns based on content
+  const autoSizedColumns = useMemo(() => {
+    if (!autoSizeColumns || !data || data.length === 0) {
+      return visibleColumns.map(col => ({
+        ...col,
+        width: col.width || 150,
+      }));
+    }
+
+    return visibleColumns.map(col => ({
+      ...col,
+      width: col.width || calculateOptimalWidth(
+        col.key as string,
+        data,
+        col.label,
+        col.formatter,
+        col.minWidth || 100,
+        col.maxWidth || 500
+      ),
+    }));
+  }, [visibleColumns, data, autoSizeColumns]);
+
+  // Track manually resized columns
+  const manuallyResizedRef = useRef<Set<string>>(new Set());
+
+  // State for column widths (for resizing)
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
+    const widths: Record<string, number> = {};
+    autoSizedColumns.forEach(col => {
+      widths[col.key as string] = col.width || 150;
+    });
+    return widths;
+  });
+
+  // Update column widths when auto-sized columns change (but preserve manually resized columns)
+  useEffect(() => {
+    setColumnWidths(prev => {
+      const widths: Record<string, number> = {};
+      autoSizedColumns.forEach(col => {
+        const key = col.key as string;
+        // Keep manually resized width, otherwise use auto-sized width
+        widths[key] = manuallyResizedRef.current.has(key) ? prev[key] : (col.width || 150);
+      });
+      return widths;
+    });
+  }, [autoSizedColumns]);
+
+  // Resize state
+  const [resizing, setResizing] = useState<{ columnKey: string; startX: number; startWidth: number } | null>(null);
+
   // Calculate total width
   const totalWidth = useMemo(() => {
-    return visibleColumns.reduce((sum, col) => sum + col.width, 0);
-  }, [visibleColumns]);
+    return autoSizedColumns.reduce((sum, col) => sum + (columnWidths[col.key as string] || col.width || 150), 0);
+  }, [autoSizedColumns, columnWidths]);
 
   // Handle sorting
   const handleSort = useCallback((field: string) => {
@@ -70,6 +172,76 @@ const VirtualScrollTable = <T extends any>({
       ? <SortAsc size={14} style={{ marginLeft: '4px' }} />
       : <SortDesc size={14} style={{ marginLeft: '4px' }} />;
   }, [sortField, sortDirection]);
+
+  // Column resize handlers
+  const handleResizeStart = useCallback((e: React.MouseEvent, columnKey: string) => {
+    if (!enableColumnResize) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setResizing({
+      columnKey,
+      startX: e.clientX,
+      startWidth: columnWidths[columnKey],
+    });
+  }, [columnWidths, enableColumnResize]);
+
+  // Double-click to auto-resize column
+  const handleResizeDoubleClick = useCallback((e: React.MouseEvent, column: VirtualTableColumn) => {
+    if (!enableColumnResize) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const columnKey = column.key as string;
+    const optimalWidth = calculateOptimalWidth(
+      columnKey,
+      data,
+      column.label,
+      column.formatter,
+      column.minWidth || 100,
+      column.maxWidth || 500
+    );
+
+    // Mark as manually resized and update width
+    manuallyResizedRef.current.add(columnKey);
+    setColumnWidths(prev => ({
+      ...prev,
+      [columnKey]: optimalWidth,
+    }));
+  }, [data, enableColumnResize]);
+
+  const handleResizeMove = useCallback((e: MouseEvent) => {
+    if (!resizing) return;
+    const delta = e.clientX - resizing.startX;
+    const newWidth = Math.max(50, resizing.startWidth + delta);
+
+    // Mark this column as manually resized
+    manuallyResizedRef.current.add(resizing.columnKey);
+
+    setColumnWidths(prev => ({
+      ...prev,
+      [resizing.columnKey]: newWidth,
+    }));
+  }, [resizing]);
+
+  const handleResizeEnd = useCallback(() => {
+    setResizing(null);
+  }, []);
+
+  // Add/remove mouse event listeners for resize
+  useEffect(() => {
+    if (resizing) {
+      document.addEventListener('mousemove', handleResizeMove);
+      document.addEventListener('mouseup', handleResizeEnd);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      return () => {
+        document.removeEventListener('mousemove', handleResizeMove);
+        document.removeEventListener('mouseup', handleResizeEnd);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+    }
+  }, [resizing, handleResizeMove, handleResizeEnd]);
 
   // Loading state
   if (loading) {
@@ -118,32 +290,68 @@ const VirtualScrollTable = <T extends any>({
           position: 'sticky',
           top: 0,
           zIndex: 10,
-          minWidth: totalWidth,
+          minWidth: totalWidth + 20, // Add buffer to match row width
         }}
       >
-        {visibleColumns.map((column) => (
-          <div
-            key={column.key as string}
-            style={{
-              width: column.width,
-              padding: '12px',
-              fontWeight: '600',
-              fontSize: '14px',
-              color: '#333',
-              borderRight: '1px solid #e0e0e0',
-              cursor: column.sortable && onSort ? 'pointer' : 'default',
-              userSelect: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: column.align === 'right' ? 'flex-end' :
-                              column.align === 'center' ? 'center' : 'flex-start',
-            }}
-            onClick={() => column.sortable && handleSort(column.key as string)}
-          >
-            {column.label}
-            {column.sortable && renderSortIcon(column.key as string)}
-          </div>
-        ))}
+        {autoSizedColumns.map((column) => {
+          const colWidth = columnWidths[column.key as string] || column.width || 150;
+          return (
+            <div
+              key={column.key as string}
+              style={{
+                width: colWidth,
+                padding: '12px',
+                fontWeight: '600',
+                fontSize: '14px',
+                color: '#333',
+                borderRight: '1px solid #e0e0e0',
+                cursor: column.sortable && onSort ? 'pointer' : 'default',
+                userSelect: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: column.align === 'right' ? 'flex-end' :
+                                column.align === 'center' ? 'center' : 'flex-start',
+                position: 'relative',
+              }}
+              onClick={() => column.sortable && handleSort(column.key as string)}
+            >
+              {column.label}
+              {column.sortable && renderSortIcon(column.key as string)}
+
+              {/* Resize Handle */}
+              {enableColumnResize && (column.resizable !== false) && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: '4px',
+                    cursor: 'col-resize',
+                    backgroundColor: resizing?.columnKey === column.key ? '#2196f3' : 'transparent',
+                    transition: 'background-color 0.2s',
+                  }}
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    handleResizeStart(e, column.key as string);
+                  }}
+                  onDoubleClick={(e) => handleResizeDoubleClick(e, column)}
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseEnter={(e) => {
+                    if (!resizing) {
+                      (e.target as HTMLElement).style.backgroundColor = '#e0e0e0';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!resizing) {
+                      (e.target as HTMLElement).style.backgroundColor = 'transparent';
+                    }
+                  }}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Scrollable Body */}
@@ -151,7 +359,6 @@ const VirtualScrollTable = <T extends any>({
         style={{
           height: height - 50,
           overflow: 'auto',
-          minWidth: totalWidth,
         }}
       >
         {data.map((item, index) => (
@@ -164,19 +371,20 @@ const VirtualScrollTable = <T extends any>({
               backgroundColor: index % 2 === 0 ? 'white' : '#fafafa',
               cursor: onRowClick ? 'pointer' : 'default',
               height: rowHeight,
-              minWidth: totalWidth,
+              minWidth: totalWidth + 20, // Add buffer to prevent last column cutoff
             }}
             onClick={() => onRowClick && onRowClick(item, index)}
           >
-            {visibleColumns.map((column, colIndex) => {
+            {autoSizedColumns.map((column, colIndex) => {
               const value = item[column.key];
               const displayValue = column.formatter ? column.formatter(value, item) : value;
+              const colWidth = columnWidths[column.key as string] || column.width || 150;
 
               return (
                 <div
                   key={`${column.key as string}-${colIndex}`}
                   style={{
-                    width: column.width,
+                    width: colWidth,
                     padding: '8px 12px',
                     textAlign: column.align || 'left',
                     whiteSpace: 'nowrap',
@@ -273,6 +481,20 @@ export const formatters = {
 
   date: (value: string | Date): string => {
     if (!value) return '-';
+
+    // If it's already a Date object, use it directly
+    if (value instanceof Date) {
+      return isNaN(value.getTime()) ? String(value) : value.toLocaleDateString();
+    }
+
+    // For date strings in format YYYY-MM-DD, parse as local date to avoid timezone shift
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [year, month, day] = value.split('-').map(Number);
+      const date = new Date(year, month - 1, day); // month is 0-indexed
+      return date.toLocaleDateString();
+    }
+
+    // Fallback for other date formats
     const date = new Date(value);
     return isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
   },

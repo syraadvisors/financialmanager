@@ -3,7 +3,7 @@ import { X, User, Mail, Phone, Briefcase, Building2, Save, Shield, Bell, Globe, 
 import toast from 'react-hot-toast';
 import { UserProfile, UserProfileFormData, UserPreferencesFormData } from '../types/User';
 import { usersService } from '../services/api/users.service';
-import { useTheme } from '../contexts/ThemeContext';
+
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -14,7 +14,6 @@ interface UserProfileModalProps {
 type TabType = 'profile' | 'preferences' | 'security';
 
 const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, onSave }) => {
-  const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<TabType>('profile');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -45,6 +44,23 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, on
     }
   }, [isOpen]);
 
+  // Format phone number as user types: 5551234567 -> (555) 123-4567
+  const formatPhoneNumber = (value: string): string => {
+    // Remove all non-digit characters
+    const digits = value.replace(/\D/g, '');
+
+    // Format based on number of digits
+    if (digits.length === 0) {
+      return '';
+    } else if (digits.length <= 3) {
+      return `(${digits}`;
+    } else if (digits.length <= 6) {
+      return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    } else {
+      return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+    }
+  };
+
   const loadProfile = async () => {
     setLoading(true);
 
@@ -67,7 +83,7 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, on
         fullName: response.data.fullName || '',
         jobTitle: response.data.jobTitle || '',
         department: response.data.department || '',
-        phoneNumber: response.data.phoneNumber || '',
+        phoneNumber: formatPhoneNumber(response.data.phoneNumber || ''),
         bio: response.data.bio || ''
       });
       // Handle preferences - may be undefined or in different format
@@ -116,10 +132,6 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, on
       toast.error(response.error, { id: loadingToast });
       setSaving(false);
     } else {
-      // Update the theme in the ThemeContext when preferences are saved
-      if (preferencesForm.theme) {
-        setTheme(preferencesForm.theme as 'light' | 'dark');
-      }
       toast.success('Preferences updated successfully!', { id: loadingToast });
       setSaving(false);
       if (onSave) onSave();
@@ -188,6 +200,11 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, on
       setProfile(prev => prev ? { ...prev, avatarUrl: null } : null);
       if (onSave) onSave();
     }
+  };
+
+  const handlePhoneNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhoneNumber(e.target.value);
+    setProfileForm({ ...profileForm, phoneNumber: formatted });
   };
 
   if (!isOpen) return null;
@@ -574,7 +591,7 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, on
                     <input
                       type="tel"
                       value={profileForm.phoneNumber}
-                      onChange={(e) => setProfileForm({ ...profileForm, phoneNumber: e.target.value })}
+                      onChange={handlePhoneNumberChange}
                       placeholder="(555) 123-4567"
                       style={{
                         width: '100%',
@@ -640,8 +657,6 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, on
                       onChange={(e) => {
                         const newTheme = e.target.value as 'light' | 'dark';
                         setPreferencesForm({ ...preferencesForm, theme: newTheme });
-                        // Apply theme immediately for preview (won't persist until saved)
-                        setTheme(newTheme);
                       }}
                       style={{
                         width: '100%',
@@ -656,7 +671,7 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose, on
                       <option value="dark">Dark</option>
                     </select>
                     <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
-                      Theme changes apply immediately. Click "Save Changes" to persist your preference.
+                      Theme changes will be applied after saving your preferences.
                     </p>
                   </div>
 

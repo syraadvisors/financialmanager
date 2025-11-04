@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { BarChart3 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import UserProfileModal from '../../components/UserProfileModal';
 import '../styles/marketing.css';
 
 interface MarketingHeaderProps {
@@ -12,6 +13,7 @@ const MarketingHeader: React.FC<MarketingHeaderProps> = ({ onLoginClick }) => {
   const [user, setUser] = useState<any>(null);
   const [userInitials, setUserInitials] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -123,8 +125,8 @@ const MarketingHeader: React.FC<MarketingHeaderProps> = ({ onLoginClick }) => {
   };
 
   const handleUserCircleClick = () => {
-    // Navigate to app - user can access profile from the navigation menu there
-    navigate('/app');
+    // Open profile modal instead of navigating
+    setShowProfileModal(true);
   };
 
   // Debug logging
@@ -202,6 +204,10 @@ const MarketingHeader: React.FC<MarketingHeaderProps> = ({ onLoginClick }) => {
           )}
         </li>
       </ul>
+      <UserProfileModal
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+      />
     </nav>
   );
 };
