@@ -27,6 +27,8 @@ import { APP_CONFIG } from '../config/constants';
 import UndoRedoControls from './UndoRedoControls';
 import { useAuth } from '../contexts/AuthContext';
 import UserProfileModal from './UserProfileModal';
+import { importedBalanceDataService } from '../services/api/importedBalanceData.service';
+import { importedPositionsDataService } from '../services/api/importedPositionsData.service';
 import './Navigation.css';
 
 interface NavigationProps {
@@ -43,8 +45,37 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [balanceDataCount, setBalanceDataCount] = useState(0);
+  const [positionsDataCount, setPositionsDataCount] = useState(0);
   const { user, userProfile, signOut, refreshProfile } = useAuth();
   const isCollapsed = externalCollapsed !== undefined ? externalCollapsed : internalCollapsed;
+
+  // Fetch database record counts
+  useEffect(() => {
+    const fetchCounts = async () => {
+      if (!userProfile?.firmId) {
+        return;
+      }
+
+      // Fetch balance data count
+      const balanceResponse = await importedBalanceDataService.getCount(userProfile.firmId);
+      if (balanceResponse.data !== undefined) {
+        setBalanceDataCount(balanceResponse.data);
+      }
+
+      // Fetch positions data count
+      const positionsResponse = await importedPositionsDataService.getCount(userProfile.firmId);
+      if (positionsResponse.data !== undefined) {
+        setPositionsDataCount(positionsResponse.data);
+      }
+    };
+
+    fetchCounts();
+
+    // Refresh counts every 30 seconds
+    const interval = setInterval(fetchCounts, 30000);
+    return () => clearInterval(interval);
+  }, [userProfile?.firmId]);
 
   // Detect mobile screen size
   useEffect(() => {
@@ -227,7 +258,6 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
       description: 'Account balances',
       icon: 'balance',
       requiresData: 'balance',
-      badge: appState.balanceData.length || undefined,
     },
     {
       id: PageType.POSITIONS_DATA,
@@ -235,7 +265,6 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
       description: 'Account positions',
       icon: 'positions',
       requiresData: 'positions',
-      badge: appState.positionsData.length || undefined,
     },
     {
       id: PageType.HISTORY,
@@ -243,7 +272,6 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
       description: 'Previous imports',
       icon: 'history',
       requiresData: 'none',
-      badge: appState.fileHistory.length || undefined,
     },
     {
       id: PageType.FIRM_SETTINGS,
@@ -546,28 +574,28 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
               alignItems: 'center',
               gap: '8px',
               fontSize: '11px',
-              color: appState.balanceData.length > 0 ? '#4caf50' : '#999',
+              color: balanceDataCount > 0 ? '#4caf50' : '#999',
             }}>
-              {appState.balanceData.length > 0 ? (
+              {balanceDataCount > 0 ? (
                 <CheckCircle size={14} />
               ) : (
                 <AlertCircle size={14} />
               )}
-              Balance Data ({appState.balanceData.length} records)
+              Balance Data ({balanceDataCount} records)
             </div>
             <div style={{
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
               fontSize: '11px',
-              color: appState.positionsData.length > 0 ? '#4caf50' : '#999',
+              color: positionsDataCount > 0 ? '#4caf50' : '#999',
             }}>
-              {appState.positionsData.length > 0 ? (
+              {positionsDataCount > 0 ? (
                 <CheckCircle size={14} />
               ) : (
                 <AlertCircle size={14} />
               )}
-              Positions Data ({appState.positionsData.length} records)
+              Positions Data ({positionsDataCount} records)
             </div>
           </div>
         </div>

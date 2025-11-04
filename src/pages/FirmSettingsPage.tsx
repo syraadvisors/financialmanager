@@ -10,6 +10,7 @@ interface FirmSettings {
   companyName: string;
   legalName: string;
   address: string;
+  address2: string;
   city: string;
   state: string;
   zipCode: string;
@@ -28,6 +29,7 @@ const FirmSettingsPage: React.FC = () => {
     companyName: '',
     legalName: '',
     address: '',
+    address2: '',
     city: '',
     state: '',
     zipCode: '',
@@ -68,6 +70,7 @@ const FirmSettingsPage: React.FC = () => {
         companyName: response.data.firmName || '',
         legalName: response.data.legalName || '',
         address: response.data.address || '',
+        address2: response.data.address2 || '',
         city: response.data.city || '',
         state: response.data.state || '',
         zipCode: response.data.zipCode || '',
@@ -99,6 +102,7 @@ const FirmSettingsPage: React.FC = () => {
       firmName: settings.companyName,
       legalName: settings.legalName,
       address: settings.address,
+      address2: settings.address2,
       city: settings.city,
       state: settings.state,
       zipCode: settings.zipCode,
@@ -332,6 +336,17 @@ const FirmSettingsPage: React.FC = () => {
                   });
                 }}
                 placeholder="Start typing to search for addresses..."
+                style={inputStyle}
+              />
+            </div>
+
+            <div style={{ marginBottom: '24px' }}>
+              <label style={labelStyle}>Address Line 2</label>
+              <input
+                type="text"
+                value={settings.address2}
+                onChange={(e) => setSettings({ ...settings, address2: e.target.value })}
+                placeholder="Suite, Apt, Building, Floor (optional)"
                 style={inputStyle}
               />
             </div>

@@ -113,7 +113,8 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = pg_catalog, public;
 
 CREATE TRIGGER generate_agreement_number_trigger
   BEFORE INSERT ON public.billing_fee_agreements
@@ -127,7 +128,8 @@ BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = pg_catalog, public;
 
 CREATE TRIGGER billing_fee_agreements_updated_at
   BEFORE UPDATE ON public.billing_fee_agreements

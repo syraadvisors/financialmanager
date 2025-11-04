@@ -12,6 +12,7 @@ export interface FirmSettings {
   firmDomain: string;
   legalName?: string;
   address?: string;
+  address2?: string;
   city?: string;
   state?: string;
   zipCode?: string;
@@ -31,6 +32,7 @@ export interface FirmSettingsFormData {
   firmName?: string;
   legalName?: string;
   address?: string;
+  address2?: string;
   city?: string;
   state?: string;
   zipCode?: string;
@@ -129,8 +131,8 @@ export const firmsService = {
 
       // Generate unique filename with timestamp
       const fileExt = file.name.split('.').pop();
-      const fileName = `${firmId}-${Date.now()}.${fileExt}`;
-      const filePath = `logos/${fileName}`;
+      const fileName = `logo-${Date.now()}.${fileExt}`;
+      const filePath = `${firmId}/${fileName}`;
 
       // Get current firm settings to check for existing logo
       const { data: firm } = await supabase
@@ -142,16 +144,16 @@ export const firmsService = {
       if (firm?.logo_url) {
         // Extract filename from URL and delete from storage
         const oldFileName = firm.logo_url.split('/').pop();
-        if (oldFileName && oldFileName.includes(firmId)) {
+        if (oldFileName) {
           await supabase.storage
-            .from('firm-assets')
-            .remove([`logos/${oldFileName}`]);
+            .from('firm-logos')
+            .remove([`${firmId}/${oldFileName}`]);
         }
       }
 
       // Upload new logo
       const { error: uploadError } = await supabase.storage
-        .from('firm-assets')
+        .from('firm-logos')
         .upload(filePath, file, {
           cacheControl: '3600',
           upsert: false
@@ -164,7 +166,7 @@ export const firmsService = {
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
-        .from('firm-assets')
+        .from('firm-logos')
         .getPublicUrl(filePath);
 
       // Update firm with new logo URL
@@ -218,10 +220,10 @@ export const firmsService = {
       if (firm?.logo_url) {
         // Extract filename from URL and delete from storage
         const fileName = firm.logo_url.split('/').pop();
-        if (fileName && fileName.includes(firmId)) {
+        if (fileName) {
           const { error: deleteError } = await supabase.storage
-            .from('firm-assets')
-            .remove([`logos/${fileName}`]);
+            .from('firm-logos')
+            .remove([`${firmId}/${fileName}`]);
 
           if (deleteError) {
             console.error('Error deleting logo from storage:', deleteError);

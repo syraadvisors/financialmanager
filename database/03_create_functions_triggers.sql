@@ -14,7 +14,8 @@ BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = pg_catalog, public;
 
 COMMENT ON FUNCTION update_updated_at_column() IS 'Automatically updates updated_at column on row update';
 

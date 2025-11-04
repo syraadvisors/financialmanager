@@ -189,7 +189,7 @@ export const importedBalanceDataService = {
   },
 
   /**
-   * Get balance data for a specific date
+   * Get balance data for a specific date (only most recent import)
    * @param firmId Firm ID
    * @param date Date string (YYYY-MM-DD)
    */
@@ -198,11 +198,36 @@ export const importedBalanceDataService = {
     date: string
   ): Promise<ApiResponse<ImportedBalanceDataRecord[]>> {
     try {
+      // First, find the most recent import batch for this date
+      const { data: batchData, error: batchError } = await supabase
+        .from('imported_balance_data')
+        .select('import_batch_id, import_timestamp')
+        .eq('firm_id', firmId)
+        .eq('as_of_business_date', date)
+        .order('import_timestamp', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (batchError) {
+        // If no data found, return empty array
+        if (batchError.code === 'PGRST116') {
+          return { data: [] };
+        }
+        console.error('Error finding most recent batch:', batchError);
+        return { error: batchError.message };
+      }
+
+      if (!batchData) {
+        return { data: [] };
+      }
+
+      // Now fetch all records from the most recent batch
       const { data, error } = await supabase
         .from('imported_balance_data')
         .select('*')
         .eq('firm_id', firmId)
         .eq('as_of_business_date', date)
+        .eq('import_batch_id', batchData.import_batch_id)
         .order('account_number', { ascending: true });
 
       if (error) {
@@ -343,6 +368,57 @@ export const importedBalanceDataService = {
     } catch (err) {
       console.error('Unexpected error fetching import batches:', err);
       return { error: 'Failed to fetch import batches' };
+    }
+  },
+
+  /**
+   * Get count of imported balance data records for a firm
+   * Only counts records from the most recent import per date (matching display logic)
+   * @param firmId Firm ID
+   */
+  async getCount(firmId: string): Promise<ApiResponse<number>> {
+    try {
+      // Get all available dates
+      const datesResponse = await this.getAvailableDates(firmId);
+      if (datesResponse.error || !datesResponse.data) {
+        return { data: 0 };
+      }
+
+      let totalCount = 0;
+
+      // For each date, get the count of records from the most recent import
+      for (const date of datesResponse.data) {
+        // Find the most recent import batch for this date
+        const { data: batchData, error: batchError } = await supabase
+          .from('imported_balance_data')
+          .select('import_batch_id')
+          .eq('firm_id', firmId)
+          .eq('as_of_business_date', date)
+          .order('import_timestamp', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (batchError || !batchData) {
+          continue; // Skip this date if no data found
+        }
+
+        // Count records from the most recent batch for this date
+        const { count, error: countError } = await supabase
+          .from('imported_balance_data')
+          .select('*', { count: 'exact', head: true })
+          .eq('firm_id', firmId)
+          .eq('as_of_business_date', date)
+          .eq('import_batch_id', batchData.import_batch_id);
+
+        if (!countError && count) {
+          totalCount += count;
+        }
+      }
+
+      return { data: totalCount };
+    } catch (err) {
+      console.error('Unexpected error fetching balance data count:', err);
+      return { error: 'Failed to fetch balance data count' };
     }
   },
 };

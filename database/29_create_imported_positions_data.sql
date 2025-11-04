@@ -132,7 +132,8 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public;
 
 -- Create trigger to call the function
 CREATE TRIGGER set_imported_positions_data_defaults_trigger

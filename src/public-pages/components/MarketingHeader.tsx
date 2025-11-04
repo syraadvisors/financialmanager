@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { BarChart3 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -30,7 +31,7 @@ const MarketingHeader: React.FC<MarketingHeaderProps> = ({ onLoginClick }) => {
         // Get user profile for initials
         const { data: profile, error: profileError } = await supabase
           .from('user_profiles')
-          .select('full_name, first_name, last_name, user_first_name, user_last_name')
+          .select('full_name')
           .eq('id', user.id)
           .single();
 
@@ -38,33 +39,29 @@ const MarketingHeader: React.FC<MarketingHeaderProps> = ({ onLoginClick }) => {
         console.log('[MarketingHeader] Profile error:', profileError);
         console.log('[MarketingHeader] User email fallback:', user.email);
 
-        if (profile) {
-          // Try different column name combinations
-          const firstName = profile.first_name || profile.user_first_name;
-          const lastName = profile.last_name || profile.user_last_name;
-
-          console.log('[MarketingHeader] firstName:', firstName, 'lastName:', lastName);
-
-          if (firstName || lastName) {
-            const initials = (firstName?.[0] || '') + (lastName?.[0] || '');
-            console.log('[MarketingHeader] Setting initials from name:', initials);
-            setUserInitials(initials.toUpperCase());
-          } else if (profile.full_name) {
-            // Try to extract from full_name
-            const nameParts = profile.full_name.split(' ');
-            const initials = (nameParts[0]?.[0] || '') + (nameParts[nameParts.length - 1]?.[0] || '');
+        if (profile && profile.full_name) {
+          // Extract initials from full_name
+          const nameParts = profile.full_name.trim().split(' ').filter((part: string) => part.length > 0);
+          if (nameParts.length >= 2) {
+            // Use first and last name initials
+            const initials = nameParts[0][0] + nameParts[nameParts.length - 1][0];
             console.log('[MarketingHeader] Setting initials from full_name:', initials);
             setUserInitials(initials.toUpperCase());
+          } else if (nameParts.length === 1) {
+            // Only one name, use first letter
+            const initials = nameParts[0][0];
+            console.log('[MarketingHeader] Setting single initial from full_name:', initials);
+            setUserInitials(initials.toUpperCase());
           } else {
-            // No name in profile, use email
-            console.log('[MarketingHeader] No name in profile, using email');
+            // No valid name, use email
+            console.log('[MarketingHeader] Empty name, using email');
             if (user.email) {
               setUserInitials(user.email[0].toUpperCase());
             }
           }
         } else {
-          // Profile query failed or returned null, use email fallback
-          console.log('[MarketingHeader] Profile is null or error, using email fallback');
+          // No profile or full_name, use email fallback
+          console.log('[MarketingHeader] No profile or full_name, using email fallback');
           if (user.email) {
             setUserInitials(user.email[0].toUpperCase());
           }
@@ -85,20 +82,17 @@ const MarketingHeader: React.FC<MarketingHeaderProps> = ({ onLoginClick }) => {
         // Fetch profile for initials when user logs in
         supabase
           .from('user_profiles')
-          .select('full_name, first_name, last_name, user_first_name, user_last_name')
+          .select('full_name')
           .eq('id', session.user.id)
           .single()
           .then(({ data: profile }) => {
-            if (profile) {
-              const firstName = profile.first_name || profile.user_first_name;
-              const lastName = profile.last_name || profile.user_last_name;
-
-              if (firstName || lastName) {
-                const initials = (firstName?.[0] || '') + (lastName?.[0] || '');
+            if (profile && profile.full_name) {
+              const nameParts = profile.full_name.trim().split(' ').filter((part: string) => part.length > 0);
+              if (nameParts.length >= 2) {
+                const initials = nameParts[0][0] + nameParts[nameParts.length - 1][0];
                 setUserInitials(initials.toUpperCase());
-              } else if (profile.full_name) {
-                const nameParts = profile.full_name.split(' ');
-                const initials = (nameParts[0]?.[0] || '') + (nameParts[nameParts.length - 1]?.[0] || '');
+              } else if (nameParts.length === 1) {
+                const initials = nameParts[0][0];
                 setUserInitials(initials.toUpperCase());
               } else if (session.user.email) {
                 setUserInitials(session.user.email[0].toUpperCase());
@@ -204,10 +198,13 @@ const MarketingHeader: React.FC<MarketingHeaderProps> = ({ onLoginClick }) => {
           )}
         </li>
       </ul>
-      <UserProfileModal
-        isOpen={showProfileModal}
-        onClose={() => setShowProfileModal(false)}
-      />
+      {showProfileModal && ReactDOM.createPortal(
+        <UserProfileModal
+          isOpen={showProfileModal}
+          onClose={() => setShowProfileModal(false)}
+        />,
+        document.body
+      )}
     </nav>
   );
 };

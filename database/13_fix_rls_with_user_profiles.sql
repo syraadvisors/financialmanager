@@ -15,7 +15,8 @@ DROP FUNCTION IF EXISTS auth.user_firm_id();
 CREATE OR REPLACE FUNCTION auth.user_firm_id()
 RETURNS UUID AS $$
   SELECT firm_id FROM user_profiles WHERE id = auth.uid();
-$$ LANGUAGE SQL STABLE SECURITY DEFINER;
+$$ LANGUAGE SQL STABLE SECURITY DEFINER
+SET search_path = pg_catalog, public;
 
 COMMENT ON FUNCTION auth.user_firm_id() IS 'Returns the firm_id for the currently authenticated user from user_profiles table';
 

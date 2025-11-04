@@ -189,7 +189,8 @@ RETURNS BOOLEAN AS $$
     SELECT 1 FROM user_profiles
     WHERE id = auth.uid() AND role = 'super_admin'
   );
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
+$$ LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, public;
 
 -- Update existing policies by adding super admin bypass
 -- For clients table
@@ -275,7 +276,8 @@ RETURNS BOOLEAN AS $$
     SELECT 1 FROM user_profiles
     WHERE id = user_id AND role = 'super_admin'
   );
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
+$$ LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, public;
 
 -- Function to get active impersonation session
 CREATE OR REPLACE FUNCTION get_active_impersonation_session()
@@ -303,7 +305,8 @@ RETURNS TABLE (
     AND is_active = true
   ORDER BY created_at DESC
   LIMIT 1;
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
+$$ LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, public;
 
 -- Function to start impersonation
 CREATE OR REPLACE FUNCTION start_impersonation(
@@ -385,7 +388,8 @@ BEGIN
 
   RETURN session_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public;
 
 -- Function to end impersonation
 CREATE OR REPLACE FUNCTION end_impersonation()
@@ -440,7 +444,8 @@ BEGIN
 
   RETURN true;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public;
 
 -- =====================================================
 -- 7. Create First Super Admin

@@ -171,7 +171,8 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = pg_catalog, public;
 
 CREATE TRIGGER generate_period_number_trigger
   BEFORE INSERT ON public.billing_periods
@@ -200,7 +201,8 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = pg_catalog, public;
 
 CREATE TRIGGER set_default_period_name_trigger
   BEFORE INSERT ON public.billing_periods
@@ -214,7 +216,8 @@ BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = pg_catalog, public;
 
 CREATE TRIGGER billing_periods_updated_at
   BEFORE UPDATE ON public.billing_periods

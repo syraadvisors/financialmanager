@@ -35,7 +35,17 @@
       "Bash(git rm:*)",
       "Bash(git mv:*)",
       "Bash(if exist \"node_modules\\.cache\" rmdir /s /q \"node_modules\\.cache\")",
-      "Bash(if exist \"s:\\Software Development\\financial_manager\\node_modules\\.cache\" rmdir /s /q \"s:\\Software Development\\financial_manager\\node_modules\\.cache\")"
+      "Bash(if exist \"s:\\Software Development\\financial_manager\\node_modules\\.cache\" rmdir /s /q \"s:\\Software Development\\financial_manager\\node_modules\\.cache\")",
+      "Bash(Remove-Item -Path \"node_modules\\.cache\" -Recurse -Force -ErrorAction SilentlyContinue)",
+      "Read(//s/**)",
+      "Bash(powershell -Command \"Start-Process ''C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe''\")",
+      "Bash(where docker)",
+      "Bash(node generate_fee_schedules_sql.js:*)",
+      "Bash(if [ -d \"node_modules/.cache\" ])",
+      "Bash(then rm -rf \"node_modules/.cache\")",
+      "Bash(fi)",
+      "Bash(npx supabase start)",
+      "Bash(\"src\\pages\\EnhancedBalanceDataPage.tsx\")"
     ],
     "deny": [],
     "ask": []

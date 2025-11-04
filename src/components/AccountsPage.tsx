@@ -15,12 +15,16 @@ import { Account, AccountStatus, ReconciliationStatus, AccountMismatch, AccountF
 import AccountFormModal from './AccountFormModal';
 import { useFirm } from '../contexts/FirmContext';
 import { accountsService } from '../services/api/accounts.service';
+import { masterAccountsService } from '../services/api/masterAccounts.service';
+import { householdsService } from '../services/api/households.service';
+import { MasterAccount } from '../types/MasterAccount';
+import { Household } from '../types/Household';
 
 const AccountsPage: React.FC = () => {
   const { firmId } = useFirm();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<AccountStatus | 'ALL'>('ALL');
-  const [reconciliationFilter, setReconciliationFilter] = useState<ReconciliationStatus | 'ALL'>('ALL');
+  const [reconciliationFilter, setReconciliationFilter] = useState<ReconciliationStatus | 'ALL' | 'UNMATCHED'>('ALL');
   const [showMismatchesOnly, setShowMismatchesOnly] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isOffboardModalOpen, setIsOffboardModalOpen] = useState(false);
@@ -29,26 +33,45 @@ const AccountsPage: React.FC = () => {
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [masterAccounts, setMasterAccounts] = useState<MasterAccount[]>([]);
+  const [households, setHouseholds] = useState<Household[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch accounts from Supabase
+  // Fetch accounts, master accounts, and households from Supabase
   useEffect(() => {
-    const fetchAccounts = async () => {
+    const fetchData = async () => {
       if (!firmId) return;
 
       setLoading(true);
-      const response = await accountsService.getAll(firmId);
 
-      if (response.data) {
-        setAccounts(response.data);
-      } else if (response.error) {
-        console.error('Failed to fetch accounts:', response.error);
+      // Fetch accounts
+      const accountsResponse = await accountsService.getAll(firmId);
+      if (accountsResponse.data) {
+        setAccounts(accountsResponse.data);
+      } else if (accountsResponse.error) {
+        console.error('Failed to fetch accounts:', accountsResponse.error);
+      }
+
+      // Fetch master accounts
+      const masterAccountsResponse = await masterAccountsService.getAll(firmId);
+      if (masterAccountsResponse.data) {
+        setMasterAccounts(masterAccountsResponse.data);
+      } else if (masterAccountsResponse.error) {
+        console.error('Failed to fetch master accounts:', masterAccountsResponse.error);
+      }
+
+      // Fetch households
+      const householdsResponse = await householdsService.getAll(firmId);
+      if (householdsResponse.data) {
+        setHouseholds(householdsResponse.data);
+      } else if (householdsResponse.error) {
+        console.error('Failed to fetch households:', householdsResponse.error);
       }
 
       setLoading(false);
     };
 
-    fetchAccounts();
+    fetchData();
   }, [firmId]);
 
   // Mock clients for assignment dropdown
@@ -60,24 +83,17 @@ const AccountsPage: React.FC = () => {
     { id: '5', name: 'Robert Johnson' },
   ];
 
-  // Mock households for account form
-  const mockHouseholds = [
-    { id: 'HH-001', name: 'Smith Family' },
-    { id: 'HH-002', name: 'Johnson Family' },
-    { id: 'HH-003', name: 'Doe Family' },
-  ];
+  // Transform households for account form (convert to simple name format)
+  const availableHouseholds = households.map(h => ({
+    id: h.id,
+    name: h.householdName
+  }));
 
   // Mock fee schedules for account form
   const mockFeeSchedules = [
     { id: 'FS-001', name: 'Standard Tiered' },
     { id: 'FS-002', name: 'Premium Flat' },
     { id: 'FS-003', name: 'Corporate Standard' },
-  ];
-
-  // Mock master accounts for account form
-  const mockMasterAccounts = [
-    { id: 'MA-001', masterAccountNumber: 'MA-12345', masterAccountName: 'Primary Master Account' },
-    { id: 'MA-002', masterAccountNumber: 'MA-67890', masterAccountName: 'Secondary Master Account' },
   ];
 
   const handleAddAccount = () => {
@@ -97,9 +113,11 @@ const AccountsPage: React.FC = () => {
       // Update existing account
       const response = await accountsService.update(accountData.id, accountData);
       if (response.data) {
-        setAccounts(prev => prev.map(acc =>
-          acc.id === accountData.id ? response.data! : acc
-        ));
+        // Refetch all accounts to get the client name populated via join
+        const accountsResponse = await accountsService.getAll(firmId);
+        if (accountsResponse.data) {
+          setAccounts(accountsResponse.data);
+        }
       } else if (response.error) {
         console.error('Failed to update account:', response.error);
         alert('Failed to update account');
@@ -112,10 +130,14 @@ const AccountsPage: React.FC = () => {
         firmId,
       });
       if (response.data) {
-        setAccounts(prev => [...prev, response.data!]);
+        // Refetch all accounts to get the client name populated via join
+        const accountsResponse = await accountsService.getAll(firmId);
+        if (accountsResponse.data) {
+          setAccounts(accountsResponse.data);
+        }
       } else if (response.error) {
         console.error('Failed to create account:', response.error);
-        alert('Failed to create account');
+        alert(`Failed to create account: ${response.error}`);
         return;
       }
     }
@@ -134,7 +156,7 @@ const AccountsPage: React.FC = () => {
   };
 
   const handleAssignAccount = async (clientId: string) => {
-    if (!selectedAccount) return;
+    if (!selectedAccount || !firmId) return;
 
     const selectedClient = mockClients.find(c => c.id === clientId);
     if (!selectedClient) return;
@@ -148,9 +170,11 @@ const AccountsPage: React.FC = () => {
     });
 
     if (response.data) {
-      setAccounts(prev => prev.map(account =>
-        account.id === selectedAccount.id ? response.data! : account
-      ));
+      // Refetch all accounts to get the client name populated via join
+      const accountsResponse = await accountsService.getAll(firmId);
+      if (accountsResponse.data) {
+        setAccounts(accountsResponse.data);
+      }
     } else if (response.error) {
       console.error('Failed to assign account:', response.error);
       alert('Failed to assign account');
@@ -162,7 +186,7 @@ const AccountsPage: React.FC = () => {
   };
 
   const handleOffboardAccount = async () => {
-    if (!selectedAccount) return;
+    if (!selectedAccount || !firmId) return;
 
     const response = await accountsService.update(selectedAccount.id, {
       accountStatus: AccountStatus.INACTIVE,
@@ -172,9 +196,11 @@ const AccountsPage: React.FC = () => {
     });
 
     if (response.data) {
-      setAccounts(prev => prev.map(account =>
-        account.id === selectedAccount.id ? response.data! : account
-      ));
+      // Refetch all accounts to get the client name populated via join
+      const accountsResponse = await accountsService.getAll(firmId);
+      if (accountsResponse.data) {
+        setAccounts(accountsResponse.data);
+      }
     } else if (response.error) {
       console.error('Failed to offboard account:', response.error);
       alert('Failed to offboard account');
@@ -210,7 +236,11 @@ const AccountsPage: React.FC = () => {
     });
 
     if (response.data) {
-      setAccounts(prev => [...prev, response.data!]);
+      // Refetch all accounts to get the client name populated via join
+      const accountsResponse = await accountsService.getAll(firmId);
+      if (accountsResponse.data) {
+        setAccounts(accountsResponse.data);
+      }
     } else if (response.error) {
       console.error('Failed to link account:', response.error);
       alert('Failed to link account');
@@ -257,7 +287,13 @@ const AccountsPage: React.FC = () => {
                            account.clientName?.toLowerCase().includes(searchTerm.toLowerCase());
 
       const matchesStatus = statusFilter === 'ALL' || account.accountStatus === statusFilter;
-      const matchesReconciliation = reconciliationFilter === 'ALL' || account.reconciliationStatus === reconciliationFilter;
+
+      // Handle UNMATCHED filter (shows accounts without a client assignment)
+      const matchesReconciliation = reconciliationFilter === 'ALL' ||
+                                   (reconciliationFilter === 'UNMATCHED'
+                                     ? !account.clientId
+                                     : account.reconciliationStatus === reconciliationFilter);
+
       const matchesMismatch = !showMismatchesOnly ||
                              account.reconciliationStatus === ReconciliationStatus.NEW_ACCOUNT ||
                              account.reconciliationStatus === ReconciliationStatus.DELINKED;
@@ -529,11 +565,12 @@ const AccountsPage: React.FC = () => {
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as AccountStatus | 'ALL')}
             style={{
-              padding: '10px 16px',
+              padding: '10px 32px 10px 16px',
               border: '1px solid #ddd',
               borderRadius: '6px',
               fontSize: '14px',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              minWidth: '150px'
             }}
           >
             <option value="ALL">All Statuses</option>
@@ -545,16 +582,18 @@ const AccountsPage: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <select
             value={reconciliationFilter}
-            onChange={(e) => setReconciliationFilter(e.target.value as ReconciliationStatus | 'ALL')}
+            onChange={(e) => setReconciliationFilter(e.target.value as ReconciliationStatus | 'ALL' | 'UNMATCHED')}
             style={{
-              padding: '10px 16px',
+              padding: '10px 32px 10px 16px',
               border: '1px solid #ddd',
               borderRadius: '6px',
               fontSize: '14px',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              minWidth: '180px'
             }}
           >
             <option value="ALL">All Reconciliation</option>
+            <option value="UNMATCHED">Unmatched</option>
             <option value={ReconciliationStatus.MATCHED}>Matched</option>
             <option value={ReconciliationStatus.NEW_ACCOUNT}>New Accounts</option>
             <option value={ReconciliationStatus.DELINKED}>Delinked</option>
@@ -567,20 +606,23 @@ const AccountsPage: React.FC = () => {
         backgroundColor: 'white',
         borderRadius: '8px',
         border: '1px solid #e0e0e0',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        maxHeight: 'calc(100vh - 500px)',
+        display: 'flex',
+        flexDirection: 'column'
       }}>
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
               <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '2px solid #e0e0e0' }}>
-                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>ACCOUNT</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>CLIENT</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>TYPE</th>
-                <th style={{ padding: '16px', textAlign: 'right', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>BALANCE</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>STATUS</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>RECONCILIATION</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>LAST IMPORT</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>ACTIONS</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>ACCOUNT</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>CLIENT</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>TYPE</th>
+                <th style={{ padding: '16px', textAlign: 'right', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>BALANCE</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>STATUS</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>RECONCILIATION</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>LAST IMPORT</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -781,9 +823,9 @@ const AccountsPage: React.FC = () => {
         onSave={handleSaveAccount}
         account={editingAccount}
         availableClients={mockClients}
-        availableHouseholds={mockHouseholds}
+        availableHouseholds={availableHouseholds}
         availableFeeSchedules={mockFeeSchedules}
-        availableMasterAccounts={mockMasterAccounts}
+        availableMasterAccounts={masterAccounts}
       />
     </div>
   );

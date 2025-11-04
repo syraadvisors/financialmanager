@@ -9,6 +9,7 @@ interface HouseholdFormModalProps {
   onSave: (household: HouseholdFormData) => void;
   household: Household | null;
   existingHouseholds: Household[]; // All households to check for account conflicts
+  availableAccounts: Account[]; // Real accounts from database
 }
 
 const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
@@ -16,10 +17,11 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
   onClose,
   onSave,
   household,
-  existingHouseholds
+  existingHouseholds,
+  availableAccounts
 }) => {
-  // Mock accounts for selection - in production, this would come from API/state
-  const mockAccounts: Account[] = [
+  // Use real accounts passed as prop instead of mock data
+  const mockAccounts: Account[] = availableAccounts || [
     {
       id: '1',
       firmId: 'mock-firm-id',
@@ -286,7 +288,7 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
 
   // Filter accounts to only show available ones (not in other households)
   // When editing, include accounts from the current household
-  const availableAccounts = useMemo(() => {
+  const filteredAvailableAccounts = useMemo(() => {
     return mockAccounts.filter(account => {
       // If editing this household, include its own accounts
       if (household && account.householdId === household.id) {
@@ -295,18 +297,18 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
       // Otherwise, only include accounts without a household
       return !account.householdId;
     });
-  }, [household]);
+  }, [household, mockAccounts]);
 
   // Get unique clients from selected accounts
   const associatedClients = useMemo(() => {
-    const selectedAccounts = availableAccounts.filter(acc => formData.memberAccountIds.includes(acc.id));
+    const selectedAccounts = filteredAvailableAccounts.filter(acc => formData.memberAccountIds.includes(acc.id));
     const clientIds = new Set(selectedAccounts.map(acc => acc.clientId).filter(Boolean));
     return mockClients.filter(client => clientIds.has(client.id));
-  }, [formData.memberAccountIds, availableAccounts]);
+  }, [formData.memberAccountIds, filteredAvailableAccounts, mockClients]);
 
   // Filter accounts based on search (only from available accounts)
   const filteredAccounts = useMemo(() => {
-    let accounts = availableAccounts;
+    let accounts = filteredAvailableAccounts;
 
     if (accountSearchTerm.trim()) {
       const searchLower = accountSearchTerm.toLowerCase();
@@ -318,7 +320,7 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
     }
 
     return accounts;
-  }, [accountSearchTerm, availableAccounts]);
+  }, [accountSearchTerm, filteredAvailableAccounts]);
 
   const validate = (): boolean => {
     const newErrors: { [key: string]: string } = {};
@@ -368,10 +370,10 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
 
   // Calculate total AUM from selected accounts
   const totalAUM = useMemo(() => {
-    return availableAccounts
+    return filteredAvailableAccounts
       .filter(acc => formData.memberAccountIds.includes(acc.id))
       .reduce((sum, acc) => sum + (acc.currentBalance || 0), 0);
-  }, [formData.memberAccountIds, availableAccounts]);
+  }, [formData.memberAccountIds, filteredAvailableAccounts]);
 
   if (!isOpen) return null;
 
@@ -577,7 +579,7 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
               </p>
 
               {/* Availability Info */}
-              {mockAccounts.length > availableAccounts.length && (
+              {mockAccounts.length > filteredAvailableAccounts.length && (
                 <div style={{
                   padding: '10px 12px',
                   backgroundColor: '#fff3e0',
@@ -587,7 +589,7 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
                   fontSize: '13px',
                   color: '#e65100'
                 }}>
-                  <strong>Note:</strong> {mockAccounts.length - availableAccounts.length} account{mockAccounts.length - availableAccounts.length !== 1 ? 's are' : ' is'} already assigned to other households and cannot be selected.
+                  <strong>Note:</strong> {mockAccounts.length - filteredAvailableAccounts.length} account{mockAccounts.length - filteredAvailableAccounts.length !== 1 ? 's are' : ' is'} already assigned to other households and cannot be selected.
                 </div>
               )}
 

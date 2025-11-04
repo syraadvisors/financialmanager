@@ -688,17 +688,20 @@ const UserManagementPage: React.FC = () => {
         backgroundColor: 'white',
         borderRadius: '12px',
         boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        maxHeight: 'calc(100vh - 500px)',
+        display: 'flex',
+        flexDirection: 'column'
       }}>
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1 }}>
           <table style={{
             width: '100%',
             borderCollapse: 'collapse'
           }}>
-            <thead>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
               <tr style={{ backgroundColor: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
                 {canManageUsers && (
-                  <th style={{ padding: '12px 16px', textAlign: 'center', width: '40px' }}>
+                  <th style={{ padding: '12px 16px', textAlign: 'center', width: '40px', backgroundColor: '#f9fafb' }}>
                     <input
                       type="checkbox"
                       checked={selectedUserIds.size === filteredUsers.filter(u => u.id !== userProfile?.id).length && filteredUsers.length > 1}
@@ -707,23 +710,23 @@ const UserManagementPage: React.FC = () => {
                     />
                   </th>
                 )}
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', backgroundColor: '#f9fafb' }}>
                   User
                 </th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', backgroundColor: '#f9fafb' }}>
                   Role
                 </th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', backgroundColor: '#f9fafb' }}>
                   Status
                 </th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', backgroundColor: '#f9fafb' }}>
                   Last Seen
                 </th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', backgroundColor: '#f9fafb' }}>
                   Login Count
                 </th>
                 {canManageUsers && (
-                  <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+                  <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', backgroundColor: '#f9fafb' }}>
                     Actions
                   </th>
                 )}

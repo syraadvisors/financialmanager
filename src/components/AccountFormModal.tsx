@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Search, AlertCircle, CheckCircle, DollarSign, Calendar, Users, Home } from 'lucide-react';
+import { X, Search, AlertCircle, CheckCircle, DollarSign, Calendar, Users, Home, Database } from 'lucide-react';
 import {
   Account,
   AccountFormData,
@@ -7,6 +7,12 @@ import {
   AccountStatus,
   ReconciliationStatus
 } from '../types/Account';
+import { Client } from '../types/Client';
+import { Household } from '../types/Household';
+import { clientsService } from '../services/api/clients.service';
+import { householdsService } from '../services/api/households.service';
+import { importedBalanceDataService } from '../services/api/importedBalanceData.service';
+import { useAuth } from '../contexts/AuthContext';
 
 interface AccountFormModalProps {
   isOpen: boolean;
@@ -29,6 +35,7 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
   availableFeeSchedules = [],
   availableMasterAccounts = []
 }) => {
+  const { userProfile } = useAuth();
   const [formData, setFormData] = useState<AccountFormData>({
     accountNumber: '',
     accountName: '',
@@ -41,7 +48,69 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
   const [activeTab, setActiveTab] = useState<'basic' | 'relationships' | 'billing' | 'notes'>('basic');
   const [clientSearchTerm, setClientSearchTerm] = useState('');
   const [householdSearchTerm, setHouseholdSearchTerm] = useState('');
+  const [masterAccountSearchTerm, setMasterAccountSearchTerm] = useState('');
+  const [isMasterAccountFocused, setIsMasterAccountFocused] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [realClients, setRealClients] = useState<Client[]>([]);
+  const [realHouseholds, setRealHouseholds] = useState<Household[]>([]);
+  const [loadingData, setLoadingData] = useState(false);
+  const [currentBalance, setCurrentBalance] = useState<number | undefined>(undefined);
+
+  // Load real clients and households from database
+  useEffect(() => {
+    const loadData = async () => {
+      if (!isOpen || !userProfile?.firmId) return;
+
+      setLoadingData(true);
+
+      // Load clients
+      const clientsResponse = await clientsService.getAll();
+      if (clientsResponse.data) {
+        setRealClients(clientsResponse.data);
+      }
+
+      // Load households
+      const householdsResponse = await householdsService.getAll(userProfile.firmId);
+      if (householdsResponse.data) {
+        setRealHouseholds(householdsResponse.data);
+      }
+
+      setLoadingData(false);
+    };
+
+    loadData();
+  }, [isOpen, userProfile?.firmId]);
+
+  // Load current balance when account number changes
+  useEffect(() => {
+    const fetchBalance = async () => {
+      if (!formData.accountNumber || !userProfile?.firmId) {
+        setCurrentBalance(undefined);
+        return;
+      }
+
+      // Only fetch if it's an 8 or 9 digit number (valid account number)
+      if (!/^\d{8,9}$/.test(formData.accountNumber)) {
+        setCurrentBalance(undefined);
+        return;
+      }
+
+      const balanceResponse = await importedBalanceDataService.getByAccountNumber(
+        userProfile.firmId,
+        formData.accountNumber
+      );
+
+      if (balanceResponse.data && balanceResponse.data.length > 0) {
+        // Get the most recent balance
+        const mostRecent = balanceResponse.data[0];
+        setCurrentBalance(mostRecent.netMarketValue);
+      } else {
+        setCurrentBalance(0);
+      }
+    };
+
+    fetchBalance();
+  }, [formData.accountNumber, userProfile?.firmId]);
 
   useEffect(() => {
     if (account) {
@@ -76,6 +145,7 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
         isExcludedFromBilling: account.isExcludedFromBilling,
         billingOverride: account.billingOverride,
       });
+      setCurrentBalance(account.currentBalance);
     } else {
       // Reset form for new account
       setFormData({
@@ -86,11 +156,13 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
         reconciliationStatus: ReconciliationStatus.MATCHED,
         isExcludedFromBilling: false,
       });
+      setCurrentBalance(undefined);
       setActiveTab('basic');
     }
     setErrors({});
     setClientSearchTerm('');
     setHouseholdSearchTerm('');
+    setMasterAccountSearchTerm('');
   }, [account, isOpen]);
 
   const validateForm = (): boolean => {
@@ -98,12 +170,19 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
 
     if (!formData.accountNumber.trim()) {
       newErrors.accountNumber = 'Account number is required';
+    } else if (!/^\d{8,9}$/.test(formData.accountNumber)) {
+      newErrors.accountNumber = 'Account number must be 8 or 9 digits';
+    } else if (formData.accountNumber.startsWith('0')) {
+      newErrors.accountNumber = 'Account number cannot start with 0';
     }
     if (!formData.accountName.trim()) {
       newErrors.accountName = 'Account name is required';
     }
     if (!formData.registrationName?.trim()) {
       newErrors.registrationName = 'Registration name is required';
+    }
+    if (!formData.masterAccountId) {
+      newErrors.masterAccountId = 'Master account is required';
     }
     if (formData.taxId && !/^\d{2}-\d{7}$/.test(formData.taxId) && !/^\d{3}-\d{2}-\d{4}$/.test(formData.taxId)) {
       newErrors.taxId = 'Tax ID must be in format XX-XXXXXXX (EIN) or XXX-XX-XXXX (SSN)';
@@ -121,7 +200,14 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
   };
 
   const updateField = (field: keyof AccountFormData, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value };
+      // Auto-populate custodian account ID with account number
+      if (field === 'accountNumber') {
+        updated.custodianAccountId = value;
+      }
+      return updated;
+    });
     // Clear error for this field when user types
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
@@ -129,16 +215,16 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
   };
 
   const handleClientSelect = (clientId: string) => {
-    const selectedClient = availableClients.find(c => c.id === clientId);
+    const selectedClient = realClients.find(c => c.id === clientId);
     updateField('clientId', clientId);
-    updateField('clientName', selectedClient?.name);
+    updateField('clientName', selectedClient?.fullLegalName);
     setClientSearchTerm('');
   };
 
   const handleHouseholdSelect = (householdId: string) => {
-    const selectedHousehold = availableHouseholds.find(h => h.id === householdId);
+    const selectedHousehold = realHouseholds.find(h => h.id === householdId);
     updateField('householdId', householdId);
-    updateField('householdName', selectedHousehold?.name);
+    updateField('householdName', selectedHousehold?.householdName);
     setHouseholdSearchTerm('');
   };
 
@@ -149,22 +235,33 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
   };
 
   const handleMasterAccountSelect = (masterAccountId: string) => {
+    const selectedMasterAccount = availableMasterAccounts.find(ma => ma.id === masterAccountId);
     updateField('masterAccountId', masterAccountId);
+    setMasterAccountSearchTerm('');
+    setIsMasterAccountFocused(false);
   };
 
   const filteredClients = useMemo(() => {
-    if (!clientSearchTerm) return availableClients.slice(0, 10);
-    return availableClients.filter(c =>
-      c.name.toLowerCase().includes(clientSearchTerm.toLowerCase())
+    if (!clientSearchTerm) return realClients.slice(0, 10);
+    return realClients.filter(c =>
+      c.fullLegalName?.toLowerCase().includes(clientSearchTerm.toLowerCase())
     ).slice(0, 10);
-  }, [availableClients, clientSearchTerm]);
+  }, [realClients, clientSearchTerm]);
 
   const filteredHouseholds = useMemo(() => {
-    if (!householdSearchTerm) return availableHouseholds.slice(0, 10);
-    return availableHouseholds.filter(h =>
-      h.name.toLowerCase().includes(householdSearchTerm.toLowerCase())
+    if (!householdSearchTerm) return realHouseholds.slice(0, 10);
+    return realHouseholds.filter(h =>
+      h.householdName?.toLowerCase().includes(householdSearchTerm.toLowerCase())
     ).slice(0, 10);
-  }, [availableHouseholds, householdSearchTerm]);
+  }, [realHouseholds, householdSearchTerm]);
+
+  const filteredMasterAccounts = useMemo(() => {
+    if (!masterAccountSearchTerm) return availableMasterAccounts.slice(0, 10);
+    return availableMasterAccounts.filter(ma =>
+      ma.masterAccountNumber?.toLowerCase().includes(masterAccountSearchTerm.toLowerCase()) ||
+      ma.masterAccountName?.toLowerCase().includes(masterAccountSearchTerm.toLowerCase())
+    ).slice(0, 10);
+  }, [availableMasterAccounts, masterAccountSearchTerm]);
 
   if (!isOpen) return null;
 
@@ -196,7 +293,7 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
   const renderBasicInfo = () => (
     <div>
       <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#333', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <DollarSign size={18} />
+        <Database size={18} />
         Basic Account Information
       </h3>
 
@@ -208,8 +305,15 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
           <input
             type="text"
             value={formData.accountNumber}
-            onChange={(e) => updateField('accountNumber', e.target.value)}
-            placeholder="e.g., ACC-12345"
+            onChange={(e) => {
+              // Only allow digits
+              const value = e.target.value.replace(/\D/g, '');
+              if (value.length <= 9) {
+                updateField('accountNumber', value);
+              }
+            }}
+            placeholder="e.g., 12345678"
+            maxLength={9}
             style={{
               ...inputStyle,
               borderColor: errors.accountNumber ? '#f44336' : '#ddd'
@@ -221,6 +325,9 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
               {errors.accountNumber}
             </div>
           )}
+          <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+            8 or 9 digits, cannot start with 0
+          </div>
         </div>
 
         <div>
@@ -243,6 +350,9 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
               {errors.accountName}
             </div>
           )}
+          <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+            Internal name for the account
+          </div>
         </div>
 
         <div>
@@ -277,6 +387,123 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
 
         <div>
           <label style={labelStyle}>
+            Master Account <span style={{ color: '#f44336' }}>*</span>
+          </label>
+          {formData.masterAccountId ? (
+            <div style={{
+              padding: '12px',
+              backgroundColor: '#e3f2fd',
+              borderRadius: '8px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              border: errors.masterAccountId ? '1px solid #f44336' : '1px solid #ddd'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Database size={16} color="#1976d2" />
+                <span style={{ fontWeight: 'bold', color: '#1976d2' }}>
+                  {availableMasterAccounts.find(ma => ma.id === formData.masterAccountId)?.masterAccountNumber} - {availableMasterAccounts.find(ma => ma.id === formData.masterAccountId)?.masterAccountName}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  updateField('masterAccountId', undefined);
+                }}
+                style={{
+                  padding: '4px 12px',
+                  backgroundColor: 'white',
+                  border: '1px solid #1976d2',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  color: '#1976d2',
+                  fontWeight: 'bold'
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div style={{ position: 'relative' }}>
+                <Search size={18} style={{
+                  position: 'absolute',
+                  left: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: '#999'
+                }} />
+                <input
+                  type="text"
+                  value={masterAccountSearchTerm}
+                  onChange={(e) => setMasterAccountSearchTerm(e.target.value)}
+                  onFocus={() => setIsMasterAccountFocused(true)}
+                  onBlur={() => setTimeout(() => setIsMasterAccountFocused(false), 200)}
+                  placeholder="Search master accounts..."
+                  style={{
+                    ...inputStyle,
+                    paddingLeft: '40px',
+                    borderColor: errors.masterAccountId ? '#f44336' : '#ddd'
+                  }}
+                />
+                {isMasterAccountFocused && (masterAccountSearchTerm || filteredMasterAccounts.length > 0) && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: '0',
+                    right: '0',
+                    marginTop: '4px',
+                    border: '1px solid #ddd',
+                    borderRadius: '6px',
+                    maxHeight: '200px',
+                    overflowY: 'auto',
+                    backgroundColor: 'white',
+                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                    zIndex: 1000
+                  }}>
+                  {filteredMasterAccounts.length > 0 ? (
+                    filteredMasterAccounts.map(ma => (
+                      <div
+                        key={ma.id}
+                        onClick={() => handleMasterAccountSelect(ma.id)}
+                        style={{
+                          padding: '10px',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #f0f0f0',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                      >
+                        <Database size={14} color="#666" />
+                        <span style={{ fontSize: '14px' }}>
+                          {ma.masterAccountNumber} - {ma.masterAccountName}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ padding: '12px', color: '#999', fontSize: '14px', textAlign: 'center' }}>
+                      No master accounts found
+                    </div>
+                  )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {errors.masterAccountId && (
+            <div style={errorStyle}>
+              <AlertCircle size={14} />
+              {errors.masterAccountId}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label style={labelStyle}>
             Registration Name <span style={{ color: '#f44336' }}>*</span>
           </label>
           <input
@@ -295,6 +522,9 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
               {errors.registrationName}
             </div>
           )}
+          <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+            Legal name as registered with custodian
+          </div>
         </div>
 
         <div>
@@ -325,11 +555,41 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
           </label>
           <input
             type="text"
-            value={formData.custodianAccountId || ''}
-            onChange={(e) => updateField('custodianAccountId', e.target.value)}
-            placeholder="Custodian's account number"
-            style={inputStyle}
+            value={formData.custodianAccountId || formData.accountNumber || ''}
+            readOnly
+            disabled
+            placeholder="Auto-populated from account number"
+            style={{
+              ...inputStyle,
+              backgroundColor: '#f5f5f5',
+              color: '#666',
+              cursor: 'not-allowed'
+            }}
           />
+          <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+            Auto-populated from account number
+          </div>
+        </div>
+
+        <div>
+          <label style={labelStyle}>
+            Current Balance
+          </label>
+          <input
+            type="text"
+            value={currentBalance !== undefined ? `$${currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'No data'}
+            readOnly
+            disabled
+            style={{
+              ...inputStyle,
+              backgroundColor: '#f5f5f5',
+              color: '#666',
+              cursor: 'not-allowed'
+            }}
+          />
+          <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+            Populated from most recent balance data
+          </div>
         </div>
 
         <div>
@@ -357,20 +617,6 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
             />
           </div>
         )}
-
-        <div>
-          <label style={labelStyle}>
-            Current Balance
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            value={formData.currentBalance || ''}
-            onChange={(e) => updateField('currentBalance', e.target.value ? parseFloat(e.target.value) : undefined)}
-            placeholder="0.00"
-            style={inputStyle}
-          />
-        </div>
       </div>
     </div>
   );
@@ -468,7 +714,7 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                       >
                         <Users size={14} color="#666" />
-                        <span style={{ fontSize: '14px' }}>{client.name}</span>
+                        <span style={{ fontSize: '14px' }}>{client.fullLegalName}</span>
                       </div>
                     ))
                   ) : (
@@ -567,7 +813,7 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                       >
                         <Home size={14} color="#666" />
-                        <span style={{ fontSize: '14px' }}>{household.name}</span>
+                        <span style={{ fontSize: '14px' }}>{household.householdName}</span>
                       </div>
                     ))
                   ) : (
@@ -579,25 +825,6 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
               )}
             </div>
           )}
-        </div>
-
-        {/* Master Account Assignment */}
-        <div>
-          <label style={labelStyle}>
-            Master Account (Optional)
-          </label>
-          <select
-            value={formData.masterAccountId || ''}
-            onChange={(e) => handleMasterAccountSelect(e.target.value)}
-            style={inputStyle}
-          >
-            <option value="">No master account</option>
-            {availableMasterAccounts.map(ma => (
-              <option key={ma.id} value={ma.id}>
-                {ma.masterAccountNumber} - {ma.masterAccountName}
-              </option>
-            ))}
-          </select>
         </div>
       </div>
     </div>
@@ -847,7 +1074,7 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
           padding: '0 24px'
         }}>
           {[
-            { id: 'basic' as const, label: 'Basic Info', icon: <DollarSign size={16} /> },
+            { id: 'basic' as const, label: 'Basic Info', icon: <Database size={16} /> },
             { id: 'relationships' as const, label: 'Relationships', icon: <Users size={16} /> },
             { id: 'billing' as const, label: 'Billing', icon: <DollarSign size={16} /> },
             { id: 'notes' as const, label: 'Notes', icon: <Calendar size={16} /> }

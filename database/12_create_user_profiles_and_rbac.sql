@@ -260,19 +260,22 @@ RETURNS BOOLEAN AS $$
       AND p.name = permission_name
       AND up.status = 'active'
   );
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
+$$ LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, public;
 
 -- Function to get user's role
 CREATE OR REPLACE FUNCTION get_user_role()
 RETURNS TEXT AS $$
   SELECT role FROM user_profiles WHERE id = auth.uid();
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
+$$ LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, public;
 
 -- Function to get user's firm_id
 CREATE OR REPLACE FUNCTION get_user_firm_id()
 RETURNS UUID AS $$
   SELECT firm_id FROM user_profiles WHERE id = auth.uid();
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
+$$ LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, public;
 
 -- Function to log user login
 CREATE OR REPLACE FUNCTION log_user_login()
@@ -295,7 +298,8 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public;
 
 -- Trigger to log logins (on auth.users table)
 -- Note: This may require additional setup in Supabase

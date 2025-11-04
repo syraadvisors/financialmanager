@@ -54,7 +54,7 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
     loadAvailableDates();
   }, [userProfile?.firmId]);
 
-  // Load data for selected date
+  // Load ALL data for selected date, then deduplicate by keeping most recent import per account
   useEffect(() => {
     const loadDataForDate = async () => {
       if (!selectedDate || !userProfile?.firmId) {
@@ -63,10 +63,31 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
       }
 
       setIsLoadingData(true);
-      const response = await importedBalanceDataService.getByDate(userProfile.firmId, selectedDate);
+
+      // Get ALL records for this date (from all import batches)
+      const response = await importedBalanceDataService.getAll(userProfile.firmId);
 
       if (response.data) {
-        setDatabaseData(response.data);
+        // Filter to only this date
+        const dateFiltered = response.data.filter(row => row.asOfBusinessDate === selectedDate);
+
+        // Deduplicate: keep only the most recent import for each account
+        // Group by account number
+        const accountMap = new Map<string, any>();
+
+        dateFiltered.forEach(row => {
+          const accountNumber = row.accountNumber;
+          const existing = accountMap.get(accountNumber);
+
+          // If no existing or this one is more recent, keep it
+          if (!existing || (row.importTimestamp && (!existing.importTimestamp || row.importTimestamp > existing.importTimestamp))) {
+            accountMap.set(accountNumber, row);
+          }
+        });
+
+        // Convert map back to array
+        const deduplicatedData = Array.from(accountMap.values());
+        setDatabaseData(deduplicatedData);
       } else {
         setDatabaseData([]);
       }

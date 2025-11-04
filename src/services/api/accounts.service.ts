@@ -3,13 +3,56 @@ import { Account } from '../../types/Account';
 import { supabase } from '../../lib/supabase';
 import { mapToCamelCase, mapToSnakeCase } from '../../utils/databaseMapper';
 
+// Custom field mapping for accounts table
+// Maps TypeScript field names to database column names
+const accountFieldMap: Record<string, string> = {
+  currentBalance: 'portfolio_value',
+  openDate: 'account_opened_date',
+  closeDate: 'account_closed_date',
+};
+
+// Convert Account object to database format with custom field mapping
+function accountToDb(account: any): any {
+  const snakeCase = mapToSnakeCase(account);
+  const mapped: any = {};
+
+  for (const [key, value] of Object.entries(snakeCase)) {
+    // Check if there's a custom mapping for this field
+    const dbField = accountFieldMap[key] || key;
+    mapped[dbField] = value;
+  }
+
+  return mapped;
+}
+
+// Convert database result to Account object with custom field mapping
+function dbToAccount(dbData: any): any {
+  // First, reverse the custom mappings
+  const reversed: any = {};
+  const reverseMap: Record<string, string> = Object.fromEntries(
+    Object.entries(accountFieldMap).map(([k, v]) => [v, k])
+  );
+
+  for (const [key, value] of Object.entries(dbData)) {
+    const tsField = reverseMap[key] || key;
+    reversed[tsField] = value;
+  }
+
+  return mapToCamelCase(reversed);
+}
+
 export const accountsService = {
   // Get all accounts
   async getAll(firmId: string): Promise<ApiResponse<Account[]>> {
     try {
       const { data, error } = await supabase
         .from('accounts')
-        .select('*')
+        .select(`
+          *,
+          clients:client_id (
+            full_legal_name
+          )
+        `)
         .eq('firm_id', firmId)
         .order('account_number', { ascending: true });
 
@@ -18,7 +61,17 @@ export const accountsService = {
         return { error: error.message };
       }
 
-      return { data: mapToCamelCase<Account[]>(data) || [] };
+      // Map the data and populate clientName from the join
+      const accounts = (data || []).map((account: any) => {
+        const mapped = dbToAccount(account);
+        // Populate clientName from the joined clients table
+        if (account.clients && account.clients.full_legal_name) {
+          mapped.clientName = account.clients.full_legal_name;
+        }
+        return mapped;
+      });
+
+      return { data: accounts };
     } catch (err) {
       console.error('Unexpected error fetching accounts:', err);
       return { error: 'Failed to fetch accounts' };
@@ -43,7 +96,7 @@ export const accountsService = {
         return { error: 'Account not found' };
       }
 
-      return { data: mapToCamelCase<Account>(data) };
+      return { data: dbToAccount(data) };
     } catch (err) {
       console.error('Unexpected error fetching account:', err);
       return { error: 'Failed to fetch account' };
@@ -55,7 +108,12 @@ export const accountsService = {
     try {
       const { data, error } = await supabase
         .from('accounts')
-        .select('*')
+        .select(`
+          *,
+          clients:client_id (
+            full_legal_name
+          )
+        `)
         .eq('client_id', clientId)
         .order('account_number', { ascending: true });
 
@@ -64,7 +122,16 @@ export const accountsService = {
         return { error: error.message };
       }
 
-      return { data: mapToCamelCase<Account[]>(data) || [] };
+      // Map the data and populate clientName from the join
+      const accounts = (data || []).map((account: any) => {
+        const mapped = dbToAccount(account);
+        if (account.clients && account.clients.full_legal_name) {
+          mapped.clientName = account.clients.full_legal_name;
+        }
+        return mapped;
+      });
+
+      return { data: accounts };
     } catch (err) {
       console.error('Unexpected error fetching accounts by client:', err);
       return { error: 'Failed to fetch accounts' };
@@ -85,7 +152,7 @@ export const accountsService = {
         return { error: error.message };
       }
 
-      return { data: mapToCamelCase<Account[]>(data) || [] };
+      return { data: (data || []).map(dbToAccount) };
     } catch (err) {
       console.error('Unexpected error fetching accounts by household:', err);
       return { error: 'Failed to fetch accounts' };
@@ -95,10 +162,13 @@ export const accountsService = {
   // Create new account
   async create(account: Partial<Account>): Promise<ApiResponse<Account>> {
     try {
-      const snakeCaseAccount = mapToSnakeCase(account);
+      // Remove computed/display fields that don't exist in the database
+      const { clientName, householdName, feeScheduleName, ...accountData } = account;
+
+      const dbAccount = accountToDb(accountData);
       const { data, error } = await supabase
         .from('accounts')
-        .insert([snakeCaseAccount])
+        .insert([dbAccount])
         .select()
         .single();
 
@@ -107,7 +177,7 @@ export const accountsService = {
         return { error: error.message };
       }
 
-      return { data: mapToCamelCase<Account>(data) };
+      return { data: dbToAccount(data) };
     } catch (err) {
       console.error('Unexpected error creating account:', err);
       return { error: 'Failed to create account' };
@@ -117,10 +187,13 @@ export const accountsService = {
   // Update account
   async update(id: string, updates: Partial<Account>): Promise<ApiResponse<Account>> {
     try {
-      const snakeCaseUpdates = mapToSnakeCase(updates);
+      // Remove computed/display fields that don't exist in the database
+      const { clientName, householdName, feeScheduleName, ...accountData } = updates;
+
+      const dbUpdates = accountToDb(accountData);
       const { data, error } = await supabase
         .from('accounts')
-        .update(snakeCaseUpdates)
+        .update(dbUpdates)
         .eq('id', id)
         .select()
         .single();
@@ -134,7 +207,7 @@ export const accountsService = {
         return { error: 'Account not found' };
       }
 
-      return { data: mapToCamelCase<Account>(data) };
+      return { data: dbToAccount(data) };
     } catch (err) {
       console.error('Unexpected error updating account:', err);
       return { error: 'Failed to update account' };
@@ -158,6 +231,53 @@ export const accountsService = {
     } catch (err) {
       console.error('Unexpected error deleting account:', err);
       return { error: 'Failed to delete account' };
+    }
+  },
+
+  // Get unassigned accounts (accounts with no client_id or joint accounts with only one client)
+  async getUnassigned(firmId: string): Promise<ApiResponse<Account[]>> {
+    try {
+      const { data, error } = await supabase
+        .from('accounts')
+        .select(`
+          *,
+          clients:client_id (
+            full_legal_name
+          )
+        `)
+        .eq('firm_id', firmId)
+        .or('client_id.is.null,account_type.eq.Joint')
+        .order('account_number', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching unassigned accounts:', error);
+        return { error: error.message };
+      }
+
+      // Filter to only show accounts that are truly unassigned or joint accounts with less than 2 clients
+      // For joint accounts, we need to check how many clients are already linked
+      // For now, return all accounts without client_id plus joint accounts
+      const unassignedAccounts = (data || []).filter((account: any) => {
+        // Include if no client_id
+        if (!account.client_id) return true;
+        // Include joint accounts (they can have up to 2 clients)
+        if (account.account_type === 'Joint') return true;
+        return false;
+      });
+
+      // Map the data and populate clientName from the join
+      const accounts = unassignedAccounts.map((account: any) => {
+        const mapped = dbToAccount(account);
+        if (account.clients && account.clients.full_legal_name) {
+          mapped.clientName = account.clients.full_legal_name;
+        }
+        return mapped;
+      });
+
+      return { data: accounts };
+    } catch (err) {
+      console.error('Unexpected error fetching unassigned accounts:', err);
+      return { error: 'Failed to fetch unassigned accounts' };
     }
   },
 

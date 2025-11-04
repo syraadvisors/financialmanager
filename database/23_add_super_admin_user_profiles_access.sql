@@ -13,7 +13,8 @@
 CREATE OR REPLACE FUNCTION public.get_current_user_firm_id()
 RETURNS UUID AS $$
   SELECT firm_id FROM public.user_profiles WHERE id = auth.uid();
-$$ LANGUAGE SQL STABLE SECURITY DEFINER;
+$$ LANGUAGE SQL STABLE SECURITY DEFINER
+SET search_path = pg_catalog, public;
 
 COMMENT ON FUNCTION public.get_current_user_firm_id() IS 'Returns the firm_id for the currently authenticated user from user_profiles table';
 

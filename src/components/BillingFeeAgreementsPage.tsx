@@ -13,11 +13,19 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { BillingFeeAgreement, BillingFeeAgreementStatus } from '../types/BillingFeeAgreement';
+import { FeeSchedule } from '../types/FeeSchedule';
+import { Relationship } from '../types/Relationship';
+import { Client } from '../types/Client';
 import BillingFeeAgreementFormModal from './BillingFeeAgreementFormModal';
 import BillingFeeAgreementDetailPage from './BillingFeeAgreementDetailPage';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import { useFirm } from '../contexts/FirmContext';
 import { billingFeeAgreementsService } from '../services/api/billingFeeAgreements.service';
+import { feeSchedulesService } from '../services/api/feeSchedules.service';
+import { relationshipsService } from '../services/api/relationships.service';
+import { clientsService } from '../services/api/clients.service';
+import { accountsService } from '../services/api/accounts.service';
+import { householdsService } from '../services/api/households.service';
 
 const BillingFeeAgreementsPage: React.FC = () => {
   const { firmId } = useFirm();
@@ -28,27 +36,72 @@ const BillingFeeAgreementsPage: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingAgreement, setDeletingAgreement] = useState<BillingFeeAgreement | null>(null);
   const [agreements, setAgreements] = useState<BillingFeeAgreement[]>([]);
+  const [feeSchedules, setFeeSchedules] = useState<FeeSchedule[]>([]);
+  const [relationships, setRelationships] = useState<Relationship[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [households, setHouseholds] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewingAgreement, setViewingAgreement] = useState<BillingFeeAgreement | null>(null);
 
-  // Fetch billing fee agreements from Supabase
+  // Fetch billing fee agreements, fee schedules, relationships, and clients from Supabase
   useEffect(() => {
-    const fetchAgreements = async () => {
+    const fetchData = async () => {
       if (!firmId) return;
 
       setLoading(true);
-      const response = await billingFeeAgreementsService.getAll(firmId);
 
-      if (response.data) {
-        setAgreements(response.data);
-      } else if (response.error) {
-        console.error('Failed to fetch billing fee agreements:', response.error);
+      // Fetch all data in parallel
+      const [agreementsResponse, feeSchedulesResponse, relationshipsResponse, clientsResponse, accountsResponse, householdsResponse] = await Promise.all([
+        billingFeeAgreementsService.getAll(firmId),
+        feeSchedulesService.getActive(firmId),
+        relationshipsService.getAll(firmId),
+        clientsService.getAll(),
+        accountsService.getAll(firmId),
+        householdsService.getAll(firmId)
+      ]);
+
+      if (agreementsResponse.data) {
+        setAgreements(agreementsResponse.data);
+      } else if (agreementsResponse.error) {
+        console.error('Failed to fetch billing fee agreements:', agreementsResponse.error);
+      }
+
+      if (feeSchedulesResponse.data) {
+        console.log('Fetched fee schedules:', feeSchedulesResponse.data.length, feeSchedulesResponse.data);
+        setFeeSchedules(feeSchedulesResponse.data);
+      } else if (feeSchedulesResponse.error) {
+        console.error('Failed to fetch fee schedules:', feeSchedulesResponse.error);
+      }
+
+      if (relationshipsResponse.data) {
+        setRelationships(relationshipsResponse.data);
+      } else if (relationshipsResponse.error) {
+        console.error('Failed to fetch relationships:', relationshipsResponse.error);
+      }
+
+      if (clientsResponse.data) {
+        setClients(clientsResponse.data);
+      } else if (clientsResponse.error) {
+        console.error('Failed to fetch clients:', clientsResponse.error);
+      }
+
+      if (accountsResponse.data) {
+        setAccounts(accountsResponse.data);
+      } else if (accountsResponse.error) {
+        console.error('Failed to fetch accounts:', accountsResponse.error);
+      }
+
+      if (householdsResponse.data) {
+        setHouseholds(householdsResponse.data);
+      } else if (householdsResponse.error) {
+        console.error('Failed to fetch households:', householdsResponse.error);
       }
 
       setLoading(false);
     };
 
-    fetchAgreements();
+    fetchData();
   }, [firmId]);
 
   const handleAddAgreement = () => {
@@ -85,7 +138,7 @@ const BillingFeeAgreementsPage: React.FC = () => {
     setDeletingAgreement(null);
   };
 
-  const handleSaveAgreement = async (agreementData: any) => {
+  const handleSaveAgreement = async (agreementData: any, householdAccountFeeSchedules?: { [householdId: string]: { [accountId: string]: string } }) => {
     if (!firmId) return;
 
     if (agreementData.id) {
@@ -101,16 +154,60 @@ const BillingFeeAgreementsPage: React.FC = () => {
         return;
       }
     } else {
-      // Create new agreement
-      const response = await billingFeeAgreementsService.create({
-        ...agreementData,
-        firmId,
-      });
-      if (response.data) {
-        setAgreements(prev => [...prev, response.data!]);
-      } else if (response.error) {
-        console.error('Failed to create billing fee agreement:', response.error);
-        alert('Failed to create billing fee agreement');
+      // Create new agreements - one per household with its account-fee schedule mappings
+      if (!householdAccountFeeSchedules || Object.keys(householdAccountFeeSchedules).length === 0) {
+        alert('Please select at least one household with account fee schedules');
+        return;
+      }
+
+      const createdAgreements: any[] = [];
+      let hasError = false;
+      let totalAccounts = 0;
+
+      // Create one BFA per household
+      for (const [householdId, accountFeeScheduleMap] of Object.entries(householdAccountFeeSchedules)) {
+        const accountIds = Object.keys(accountFeeScheduleMap);
+        totalAccounts += accountIds.length;
+
+        // For each account in this household, create a separate BFA
+        for (const [accountId, feeScheduleId] of Object.entries(accountFeeScheduleMap)) {
+          const response = await billingFeeAgreementsService.create({
+            ...agreementData,
+            firmId,
+            feeScheduleId, // Individual fee schedule for this account
+            householdIds: [householdId], // Single household
+            accountIds: [accountId], // Single account per BFA
+          });
+
+          if (response.data) {
+            createdAgreements.push(response.data);
+          } else if (response.error) {
+            console.error('Failed to create billing fee agreement for account:', accountId, 'in household:', householdId);
+            console.error('Error details:', response.error);
+            console.error('Agreement data being sent:', {
+              ...agreementData,
+              firmId,
+              feeScheduleId,
+              householdIds: [householdId],
+              accountIds: [accountId],
+            });
+            hasError = true;
+            // Continue creating others even if one fails
+          }
+        }
+      }
+
+      if (hasError) {
+        alert(`Created ${createdAgreements.length} of ${totalAccounts} billing fee agreements. Some failed - check console for details.`);
+      }
+
+      // Add all created agreements to the list
+      if (createdAgreements.length > 0) {
+        setAgreements(prev => [...prev, ...createdAgreements]);
+      }
+
+      if (createdAgreements.length === 0) {
+        alert('Failed to create billing fee agreements');
         return;
       }
     }
@@ -340,20 +437,23 @@ const BillingFeeAgreementsPage: React.FC = () => {
         backgroundColor: 'white',
         borderRadius: '8px',
         border: '1px solid #e0e0e0',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        maxHeight: 'calc(100vh - 500px)',
+        display: 'flex',
+        flexDirection: 'column'
       }}>
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
               <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '2px solid #e0e0e0' }}>
-                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>AGREEMENT</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>FEE SCHEDULE</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>RELATIONSHIP</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>ACCOUNTS</th>
-                <th style={{ padding: '16px', textAlign: 'right', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>TOTAL AUM</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>BILLING</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>STATUS</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>ACTIONS</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>AGREEMENT</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>FEE SCHEDULE</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>RELATIONSHIP</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>ACCOUNTS</th>
+                <th style={{ padding: '16px', textAlign: 'right', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>TOTAL AUM</th>
+                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>BILLING</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>STATUS</th>
+                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -504,6 +604,12 @@ const BillingFeeAgreementsPage: React.FC = () => {
         onClose={handleCloseModal}
         onSave={handleSaveAgreement}
         agreement={editingAgreement}
+        availableFeeSchedules={feeSchedules}
+        availableRelationships={relationships}
+        availableClients={clients}
+        availableAccounts={accounts}
+        availableHouseholds={households}
+        existingAgreements={agreements}
       />
 
       {/* Delete Confirmation Modal */}

@@ -219,7 +219,8 @@ BEGIN
   GET DIAGNOSTICS updated_count = ROW_COUNT;
   RETURN updated_count;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public;
 
 -- =====================================================
 -- HELPER FUNCTIONS
@@ -270,7 +271,8 @@ BEGIN
     )
   ORDER BY fe.effective_date DESC, fe.created_at DESC;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public;
 
 -- =====================================================
 -- COMMENTS
