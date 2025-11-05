@@ -446,14 +446,14 @@ const BillingFeeAgreementsPage: React.FC = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
               <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '2px solid #e0e0e0' }}>
-                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>AGREEMENT</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>FEE SCHEDULE</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>RELATIONSHIP</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>ACCOUNTS</th>
-                <th style={{ padding: '16px', textAlign: 'right', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>TOTAL AUM</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>BILLING</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>STATUS</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>ACTIONS</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: '200px' }}>AGREEMENT</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: '180px' }}>FEE SCHEDULE</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: '180px' }}>RELATIONSHIP</th>
+                <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: '110px' }}>ACCOUNTS</th>
+                <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: '140px' }}>TOTAL AUM</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: '150px' }}>BILLING</th>
+                <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: '100px' }}>STATUS</th>
+                <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: '120px' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -467,12 +467,12 @@ const BillingFeeAgreementsPage: React.FC = () => {
                       backgroundColor: index % 2 === 0 ? 'white' : '#fafafa'
                     }}
                   >
-                    <td style={{ padding: '16px' }}>
+                    <td style={{ padding: '12px 16px' }}>
                       <div style={{ fontWeight: 'bold', color: '#333', fontSize: '14px' }}>
                         {agreement.agreementNumber}
                       </div>
                     </td>
-                    <td style={{ padding: '16px' }}>
+                    <td style={{ padding: '12px 16px' }}>
                       <div style={{ fontSize: '14px', color: '#333', fontWeight: '500', marginBottom: '2px' }}>
                         {agreement.feeScheduleCode}
                       </div>
@@ -496,7 +496,7 @@ const BillingFeeAgreementsPage: React.FC = () => {
                     <td style={{ padding: '16px', textAlign: 'right', fontSize: '14px', fontWeight: 'bold', color: '#333' }}>
                       {formatCurrency(agreement.totalAUM)}
                     </td>
-                    <td style={{ padding: '16px' }}>
+                    <td style={{ padding: '12px 16px' }}>
                       <div style={{ fontSize: '13px', color: '#666' }}>
                         {agreement.billingFrequency}
                       </div>
@@ -516,7 +516,7 @@ const BillingFeeAgreementsPage: React.FC = () => {
                         {agreement.status}
                       </span>
                     </td>
-                    <td style={{ padding: '16px' }}>
+                    <td style={{ padding: '12px 16px' }}>
                       <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                         <button
                           onClick={() => handleViewExceptions(agreement)}

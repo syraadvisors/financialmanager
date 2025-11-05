@@ -50,21 +50,57 @@ export const importedBalanceDataService = {
         return dbRecord;
       });
 
+      // First, verify current user and their profile
+      const { data: { user } } = await supabase.auth.getUser();
+      console.log('[importedBalanceData] Current auth user:', {
+        userId: user?.id,
+        email: user?.email
+      });
+
+      // Check user profile
+      const { data: userProfile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('id, firm_id, email, role')
+        .eq('id', user?.id)
+        .single();
+
+      console.log('[importedBalanceData] User profile:', {
+        profile: userProfile,
+        profileError: profileError?.message,
+        firmIdMatch: userProfile?.firm_id === firmId
+      });
+
+      console.log('[importedBalanceData] Inserting records:', {
+        count: records.length,
+        firmId,
+        batchId: importBatchId,
+        sampleRecord: records[0],
+        sampleDateField: records[0]?.as_of_business_date,
+        originalDataSampleDate: data[0]?.asOfBusinessDate
+      });
+
       // Insert all records in a single transaction
       const { data: insertedData, error } = await supabase
         .from('imported_balance_data')
         .insert(records)
-        .select('id');
+        .select('id, firm_id, account_number, as_of_business_date');
 
       if (error) {
-        console.error('Error importing balance data:', error);
+        console.error('[importedBalanceData] Error importing balance data:', error);
+        console.error('[importedBalanceData] Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
         return {
           success: false,
           error: error.message,
         };
       }
 
-      console.log(`Successfully imported ${insertedData?.length || 0} balance records`);
+      console.log(`[importedBalanceData] Successfully imported ${insertedData?.length || 0} balance records`);
+      console.log('[importedBalanceData] Sample inserted record:', insertedData?.[0]);
 
       return {
         success: true,
@@ -92,29 +128,72 @@ export const importedBalanceDataService = {
     offset?: number
   ): Promise<ApiResponse<ImportedBalanceDataRecord[]>> {
     try {
-      let query = supabase
-        .from('imported_balance_data')
-        .select('*')
-        .eq('firm_id', firmId)
-        .order('as_of_business_date', { ascending: false })
-        .order('account_number', { ascending: true });
+      // If limit and offset are specified, do a single paginated query
+      if (limit !== undefined && offset !== undefined) {
+        const { data, error } = await supabase
+          .from('imported_balance_data')
+          .select('*')
+          .eq('firm_id', firmId)
+          .order('as_of_business_date', { ascending: false })
+          .order('account_number', { ascending: true })
+          .range(offset, offset + limit - 1);
 
-      if (limit) {
-        query = query.limit(limit);
+        if (error) {
+          console.error('Error fetching imported balance data:', error);
+          return { error: error.message };
+        }
+
+        return { data: mapToCamelCase<ImportedBalanceDataRecord[]>(data) || [] };
       }
 
-      if (offset) {
-        query = query.range(offset, offset + (limit || 100) - 1);
+      // If no limit/offset specified, fetch ALL records using pagination
+      // Supabase has a hard limit of 1000 rows per query, so we need to paginate
+      const PAGE_SIZE = 1000;
+      let allData: any[] = [];
+      let currentPage = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const start = currentPage * PAGE_SIZE;
+        const end = start + PAGE_SIZE - 1;
+
+        const { data, error } = await supabase
+          .from('imported_balance_data')
+          .select('*')
+          .eq('firm_id', firmId)
+          .order('as_of_business_date', { ascending: false })
+          .order('account_number', { ascending: true })
+          .range(start, end);
+
+        if (error) {
+          console.error('Error fetching imported balance data:', error);
+          return { error: error.message };
+        }
+
+        if (data && data.length > 0) {
+          allData = allData.concat(data);
+          console.log(`[importedBalanceData.getAll] Fetched page ${currentPage + 1}, records: ${data.length}, total so far: ${allData.length}`);
+        }
+
+        // If we got less than PAGE_SIZE records, we've reached the end
+        hasMore = data && data.length === PAGE_SIZE;
+        currentPage++;
+
+        // Safety check to prevent infinite loops
+        if (currentPage > 100) {
+          console.warn('[importedBalanceData.getAll] Hit safety limit of 100 pages (100,000 records)');
+          break;
+        }
       }
 
-      const { data, error } = await query;
+      console.log('[importedBalanceData.getAll] Final results:', {
+        firmId,
+        recordCount: allData.length,
+        pages: currentPage,
+        sampleRecord: allData[0]
+      });
 
-      if (error) {
-        console.error('Error fetching imported balance data:', error);
-        return { error: error.message };
-      }
-
-      return { data: mapToCamelCase<ImportedBalanceDataRecord[]>(data) || [] };
+      return { data: mapToCamelCase<ImportedBalanceDataRecord[]>(allData) || [] };
     } catch (err) {
       console.error('Unexpected error fetching imported balance data:', err);
       return { error: 'Failed to fetch imported balance data' };

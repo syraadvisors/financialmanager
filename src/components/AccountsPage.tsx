@@ -302,6 +302,53 @@ const AccountsPage: React.FC = () => {
     });
   }, [accounts, searchTerm, statusFilter, reconciliationFilter, showMismatchesOnly]);
 
+  // Calculate dynamic column widths based on content
+  const columnWidths = useMemo(() => {
+    const calculateTextWidth = (text: string, basePx = 9) => {
+      // More generous approximation: 1 character ≈ 9px for typical font, add padding for cell spacing
+      // Adding 60px for cell padding (30px each side) to ensure text fits comfortably
+      return Math.max(100, (text?.length || 0) * basePx + 60);
+    };
+
+    if (filteredAccounts.length === 0) {
+      // Default widths when no data
+      return {
+        account: 250,
+        client: 200,
+        type: 120,
+        balance: 140,
+        status: 100,
+        reconciliation: 140,
+        lastImport: 130,
+        actions: 120
+      };
+    }
+
+    const accountWidth = Math.max(
+      250, // minimum width
+      ...filteredAccounts.map(a => calculateTextWidth(a.accountName))
+    );
+    const clientWidth = Math.max(
+      200,
+      ...filteredAccounts.map(a => calculateTextWidth(a.clientName || 'Unassigned'))
+    );
+    const typeWidth = Math.max(
+      120,
+      ...filteredAccounts.map(a => calculateTextWidth(a.accountType))
+    );
+
+    return {
+      account: Math.min(accountWidth, 800), // Increased max to accommodate long names
+      client: Math.min(clientWidth, 600),
+      type: Math.min(typeWidth, 250),
+      balance: 140,
+      status: 100,
+      reconciliation: 140,
+      lastImport: 130,
+      actions: 120
+    };
+  }, [filteredAccounts]);
+
   const formatCurrency = (value?: number) => {
     if (value === undefined || value === null) return 'N/A';
     return new Intl.NumberFormat('en-US', {
@@ -615,14 +662,14 @@ const AccountsPage: React.FC = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
               <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '2px solid #e0e0e0' }}>
-                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>ACCOUNT</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>CLIENT</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>TYPE</th>
-                <th style={{ padding: '16px', textAlign: 'right', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>BALANCE</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>STATUS</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>RECONCILIATION</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>LAST IMPORT</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>ACTIONS</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: `${columnWidths.account}px` }}>ACCOUNT</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: `${columnWidths.client}px` }}>CLIENT</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: `${columnWidths.type}px` }}>TYPE</th>
+                <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: `${columnWidths.balance}px` }}>BALANCE</th>
+                <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: `${columnWidths.status}px` }}>STATUS</th>
+                <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: `${columnWidths.reconciliation}px` }}>RECONCILIATION</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: `${columnWidths.lastImport}px` }}>LAST IMPORT</th>
+                <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: `${columnWidths.actions}px` }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -634,7 +681,7 @@ const AccountsPage: React.FC = () => {
                     backgroundColor: index % 2 === 0 ? 'white' : '#fafafa'
                   }}
                 >
-                  <td style={{ padding: '16px' }}>
+                  <td style={{ padding: '12px 16px' }}>
                     <div style={{ fontWeight: 'bold', color: '#333', fontSize: '14px', marginBottom: '4px' }}>
                       {account.accountName}
                     </div>
@@ -642,7 +689,7 @@ const AccountsPage: React.FC = () => {
                       {account.accountNumber}
                     </div>
                   </td>
-                  <td style={{ padding: '16px' }}>
+                  <td style={{ padding: '12px 16px' }}>
                     {account.clientName ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Users size={14} color="#666" />
@@ -654,7 +701,7 @@ const AccountsPage: React.FC = () => {
                       </span>
                     )}
                   </td>
-                  <td style={{ padding: '16px' }}>
+                  <td style={{ padding: '12px 16px' }}>
                     <span style={{
                       padding: '4px 12px',
                       backgroundColor: '#f5f5f5',
@@ -665,10 +712,10 @@ const AccountsPage: React.FC = () => {
                       {account.accountType}
                     </span>
                   </td>
-                  <td style={{ padding: '16px', textAlign: 'right', fontSize: '14px', fontWeight: 'bold', color: '#333' }}>
+                  <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: '14px', fontWeight: 'bold', color: '#333' }}>
                     {formatCurrency(account.currentBalance)}
                   </td>
-                  <td style={{ padding: '16px', textAlign: 'center' }}>
+                  <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                     <span style={{
                       padding: '4px 12px',
                       borderRadius: '12px',
@@ -680,13 +727,13 @@ const AccountsPage: React.FC = () => {
                       {account.accountStatus}
                     </span>
                   </td>
-                  <td style={{ padding: '16px', textAlign: 'center' }}>
+                  <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                     {getReconciliationBadge(account.reconciliationStatus)}
                   </td>
-                  <td style={{ padding: '16px', fontSize: '14px', color: '#666' }}>
+                  <td style={{ padding: '12px 16px', fontSize: '14px', color: '#666' }}>
                     {formatDate(account.lastImportDate)}
                   </td>
-                  <td style={{ padding: '16px' }}>
+                  <td style={{ padding: '12px 16px' }}>
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                       {account.reconciliationStatus === ReconciliationStatus.NEW_ACCOUNT && (
                         <button

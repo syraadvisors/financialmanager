@@ -45,7 +45,9 @@
       "Bash(then rm -rf \"node_modules/.cache\")",
       "Bash(fi)",
       "Bash(npx supabase start)",
-      "Bash(\"src\\pages\\EnhancedBalanceDataPage.tsx\")"
+      "Bash(\"src\\pages\\EnhancedBalanceDataPage.tsx\")",
+      "Bash(node -e:*)",
+      "Bash(powershell \"Get-Content generated_update_account_names.sql | Select-Object -Last 30\")"
     ],
     "deny": [],
     "ask": []

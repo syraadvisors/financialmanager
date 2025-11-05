@@ -305,14 +305,14 @@ const RelationshipsPage: React.FC = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
               <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '2px solid #e0e0e0' }}>
-                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>RELATIONSHIP</th>
-                <th style={{ padding: '16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>PRIMARY CONTACT</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>HOUSEHOLDS</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>ACCOUNTS</th>
-                <th style={{ padding: '16px', textAlign: 'right', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>TOTAL AUM</th>
-                <th style={{ padding: '16px', textAlign: 'right', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>ANNUAL FEES</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>STATUS</th>
-                <th style={{ padding: '16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5' }}>ACTIONS</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: '250px' }}>RELATIONSHIP</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: '200px' }}>PRIMARY CONTACT</th>
+                <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: '120px' }}>HOUSEHOLDS</th>
+                <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: '110px' }}>ACCOUNTS</th>
+                <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: '140px' }}>TOTAL AUM</th>
+                <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: '140px' }}>ANNUAL FEES</th>
+                <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: '100px' }}>STATUS</th>
+                <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#666', backgroundColor: '#f5f5f5', minWidth: '120px' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -324,7 +324,7 @@ const RelationshipsPage: React.FC = () => {
                     backgroundColor: index % 2 === 0 ? 'white' : '#fafafa'
                   }}
                 >
-                  <td style={{ padding: '16px' }}>
+                  <td style={{ padding: '12px 16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <div style={{
                         width: '40px',
@@ -349,7 +349,7 @@ const RelationshipsPage: React.FC = () => {
                       </div>
                     </div>
                   </td>
-                  <td style={{ padding: '16px' }}>
+                  <td style={{ padding: '12px 16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <Users size={14} color="#666" />
                       <span style={{ fontSize: '14px', color: '#333' }}>
@@ -393,7 +393,7 @@ const RelationshipsPage: React.FC = () => {
                       {relationship.relationshipStatus}
                     </span>
                   </td>
-                  <td style={{ padding: '16px' }}>
+                  <td style={{ padding: '12px 16px' }}>
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                       <button
                         onClick={() => handleEditRelationship(relationship)}

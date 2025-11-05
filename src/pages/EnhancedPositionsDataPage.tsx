@@ -76,12 +76,61 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
     loadDataForDate();
   }, [selectedDate, userProfile?.firmId]);
 
+  // Calculate dynamic column widths based on data content
+  const calculateColumnWidths = useMemo(() => {
+    const calculateTextWidth = (text: string, basePx = 9) => {
+      // More generous approximation: 1 character ≈ 9px for typical font, add padding for cell spacing
+      // Adding 60px for cell padding (30px each side) to ensure text fits comfortably
+      return Math.max(100, (text?.length || 0) * basePx + 60);
+    };
+
+    const sourceData = selectedDate ? databaseData : positionsData;
+
+    if (sourceData.length === 0) {
+      // Default widths when no data
+      return {
+        accountNumber: 130,
+        symbol: 110,
+        description: 300,
+        type: 110,
+        marketValue: 140,
+        shares: 120,
+      };
+    }
+
+    const accountNumberWidth = Math.max(
+      130,
+      ...sourceData.map(r => calculateTextWidth(String(r.accountNumber || '')))
+    );
+    const symbolWidth = Math.max(
+      110,
+      ...sourceData.map(r => calculateTextWidth(String(r.symbol || '')))
+    );
+    const descriptionWidth = Math.max(
+      300,
+      ...sourceData.map(r => calculateTextWidth(String(r.securityDescription || '')))
+    );
+    const typeWidth = Math.max(
+      110,
+      ...sourceData.map(r => calculateTextWidth(String(r.securityType || '')))
+    );
+
+    return {
+      accountNumber: Math.min(accountNumberWidth, 200),
+      symbol: Math.min(symbolWidth, 180),
+      description: Math.min(descriptionWidth, 900), // Increased max for long descriptions
+      type: Math.min(typeWidth, 200),
+      marketValue: 140,
+      shares: 120,
+    };
+  }, [databaseData, positionsData, selectedDate]);
+
   // Define table columns with search capabilities
-  const columns: SearchableTableColumn[] = [
+  const columns: SearchableTableColumn[] = useMemo(() => [
     {
       key: 'accountNumber',
       label: 'Account #',
-      width: 120,
+      width: calculateColumnWidths.accountNumber,
       sortable: true,
       essential: true,
       searchable: true,
@@ -89,7 +138,7 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
     {
       key: 'symbol',
       label: 'Symbol',
-      width: 100,
+      width: calculateColumnWidths.symbol,
       sortable: true,
       essential: true,
       searchable: true,
@@ -97,16 +146,16 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
     {
       key: 'securityDescription',
       label: 'Description',
-      width: 200,
+      width: calculateColumnWidths.description,
       sortable: true,
       essential: true,
       searchable: true,
-      formatter: (value) => formatters.truncate(value, 40),
+      formatter: (value) => formatters.truncate(value, 50),
     },
     {
       key: 'securityType',
       label: 'Type',
-      width: 100,
+      width: calculateColumnWidths.type,
       sortable: true,
       essential: true,
       searchable: true,
@@ -114,7 +163,7 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
     {
       key: 'marketValue',
       label: 'Market Value',
-      width: 120,
+      width: calculateColumnWidths.marketValue,
       sortable: true,
       essential: true,
       align: 'right',
@@ -123,7 +172,7 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
     {
       key: 'numberOfShares',
       label: 'Shares',
-      width: 100,
+      width: calculateColumnWidths.shares,
       sortable: true,
       essential: true,
       align: 'right',
@@ -132,7 +181,7 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
     {
       key: 'price',
       label: 'Price',
-      width: 100,
+      width: 110,
       sortable: true,
       essential: false,
       align: 'right',
@@ -141,7 +190,7 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
     {
       key: 'longShort',
       label: 'Long/Short',
-      width: 100,
+      width: 110,
       sortable: true,
       essential: false,
       align: 'center',
@@ -158,12 +207,12 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
     {
       key: 'accountingRuleCode',
       label: 'Rule Code',
-      width: 100,
+      width: 110,
       sortable: true,
       essential: false,
       align: 'center',
     },
-  ];
+  ], [calculateColumnWidths]);
 
   // Create table helpers
   const { sortData } = createVirtualTableHelpers<any>();
@@ -500,7 +549,7 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
           data={displayData}
           columns={columns}
           height={600}
-          rowHeight={50}
+          rowHeight={40}
           showAllColumns={showAllColumns}
           sortField={sortField}
           sortDirection={sortDirection}

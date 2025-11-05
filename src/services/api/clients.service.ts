@@ -7,17 +7,43 @@ export const clientsService = {
   // Get all clients
   async getAll(): Promise<ApiResponse<Client[]>> {
     try {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .order('full_legal_name', { ascending: true });
+      // Supabase has a hard limit of 1000 rows per query, so we need to paginate
+      const PAGE_SIZE = 1000;
+      let allData: any[] = [];
+      let currentPage = 0;
+      let hasMore = true;
 
-      if (error) {
-        console.error('Error fetching clients:', error);
-        return { error: error.message };
+      while (hasMore) {
+        const start = currentPage * PAGE_SIZE;
+        const end = start + PAGE_SIZE - 1;
+
+        const { data, error } = await supabase
+          .from('clients')
+          .select('*')
+          .order('full_legal_name', { ascending: true })
+          .range(start, end);
+
+        if (error) {
+          console.error('Error fetching clients:', error);
+          return { error: error.message };
+        }
+
+        if (data && data.length > 0) {
+          allData = allData.concat(data);
+        }
+
+        // If we got less than PAGE_SIZE records, we've reached the end
+        hasMore = data && data.length === PAGE_SIZE;
+        currentPage++;
+
+        // Safety check to prevent infinite loops
+        if (currentPage > 100) {
+          console.warn('[clientsService.getAll] Hit safety limit of 100 pages');
+          break;
+        }
       }
 
-      return { data: mapToCamelCase<Client[]>(data) || [] };
+      return { data: mapToCamelCase<Client[]>(allData) || [] };
     } catch (err) {
       console.error('Unexpected error fetching clients:', err);
       return { error: 'Failed to fetch clients' };

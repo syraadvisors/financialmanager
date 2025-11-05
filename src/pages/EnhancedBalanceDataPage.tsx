@@ -41,10 +41,13 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
       setIsLoadingDates(true);
       const response = await importedBalanceDataService.getAvailableDates(userProfile.firmId);
 
+      console.log('[EnhancedBalanceDataPage] Available dates from database:', response.data);
+
       if (response.data) {
         setAvailableDates(response.data);
         // Auto-select the most recent date
         if (response.data.length > 0) {
+          console.log('[EnhancedBalanceDataPage] Auto-selecting first date:', response.data[0]);
           setSelectedDate(response.data[0]);
         }
       }
@@ -62,33 +65,84 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
         return;
       }
 
+      console.log('[EnhancedBalanceDataPage] Loading data for date:', selectedDate);
       setIsLoadingData(true);
 
       // Get ALL records for this date (from all import batches)
       const response = await importedBalanceDataService.getAll(userProfile.firmId);
 
+      console.log('[EnhancedBalanceDataPage] Got response from getAll:', {
+        dataLength: response.data?.length,
+        hasError: !!response.error,
+        error: response.error,
+        firstRecord: response.data?.[0]
+      });
+
       if (response.data) {
         // Filter to only this date
-        const dateFiltered = response.data.filter(row => row.asOfBusinessDate === selectedDate);
+        const dateFiltered = response.data.filter(row => {
+          const match = row.asOfBusinessDate === selectedDate;
+          if (!match && response.data!.length < 5) {
+            console.log('[EnhancedBalanceDataPage] Date mismatch:', {
+              rowDate: row.asOfBusinessDate,
+              rowDateType: typeof row.asOfBusinessDate,
+              selectedDate,
+              selectedDateType: typeof selectedDate
+            });
+          }
+          return match;
+        });
+
+        console.log('[EnhancedBalanceDataPage] After date filtering:', {
+          totalRecords: response.data.length,
+          dateFilteredCount: dateFiltered.length,
+          selectedDate
+        });
 
         // Deduplicate: keep only the most recent import for each account
         // Group by account number
         const accountMap = new Map<string, any>();
+        let duplicateCount = 0;
+        let keptCount = 0;
 
-        dateFiltered.forEach(row => {
+        dateFiltered.forEach((row, index) => {
           const accountNumber = row.accountNumber;
           const existing = accountMap.get(accountNumber);
+
+          if (existing) {
+            duplicateCount++;
+            // Debug first few duplicates
+            if (duplicateCount <= 10) {
+              console.log('[EnhancedBalanceDataPage] Duplicate account found:', {
+                accountNumber,
+                existingTimestamp: existing.importTimestamp,
+                existingBatchId: existing.importBatchId,
+                newTimestamp: row.importTimestamp,
+                newBatchId: row.importBatchId,
+                keepingNew: !existing || (row.importTimestamp && (!existing.importTimestamp || row.importTimestamp > existing.importTimestamp))
+              });
+            }
+          }
 
           // If no existing or this one is more recent, keep it
           if (!existing || (row.importTimestamp && (!existing.importTimestamp || row.importTimestamp > existing.importTimestamp))) {
             accountMap.set(accountNumber, row);
+            if (!existing) keptCount++;
           }
         });
 
         // Convert map back to array
         const deduplicatedData = Array.from(accountMap.values());
+        console.log('[EnhancedBalanceDataPage] Deduplication summary:', {
+          totalRecordsProcessed: dateFiltered.length,
+          uniqueAccountsFound: accountMap.size,
+          duplicatesEncountered: duplicateCount,
+          finalRecordCount: deduplicatedData.length,
+          newAccountsAdded: keptCount
+        });
         setDatabaseData(deduplicatedData);
       } else {
+        console.log('[EnhancedBalanceDataPage] No data returned or error occurred');
         setDatabaseData([]);
       }
       setIsLoadingData(false);
@@ -97,13 +151,52 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
     loadDataForDate();
   }, [selectedDate, userProfile?.firmId]);
 
+  // Calculate dynamic column widths based on data content
+  const calculateColumnWidths = useMemo(() => {
+    const calculateTextWidth = (text: string, basePx = 9) => {
+      // More generous approximation: 1 character ≈ 9px for typical font, add padding for cell spacing
+      // Adding 60px for cell padding (30px each side) to ensure text fits comfortably
+      return Math.max(100, (text?.length || 0) * basePx + 60);
+    };
+
+    const sourceData = selectedDate ? databaseData : balanceData;
+
+    if (sourceData.length === 0) {
+      // Default widths when no data
+      return {
+        date: 110,
+        accountNumber: 130,
+        accountName: 350,
+        portfolioValue: 160,
+        totalCash: 140,
+      };
+    }
+
+    const accountNumberWidth = Math.max(
+      130,
+      ...sourceData.map(r => calculateTextWidth(String(r.accountNumber || '')))
+    );
+    const accountNameWidth = Math.max(
+      300,
+      ...sourceData.map(r => calculateTextWidth(String(r.accountName || '')))
+    );
+
+    return {
+      date: 110,
+      accountNumber: Math.min(accountNumberWidth, 200),
+      accountName: Math.min(accountNameWidth, 800), // Increased max to accommodate long names
+      portfolioValue: 160,
+      totalCash: 140,
+    };
+  }, [databaseData, balanceData, selectedDate]);
+
   // Define table columns with search capabilities
   // Columns match preview: asOfBusinessDate, accountNumber, accountName, portfolioValue, totalCash
-  const columns: SearchableTableColumn[] = [
+  const columns: SearchableTableColumn[] = useMemo(() => [
     {
       key: 'asOfBusinessDate',
       label: 'Date',
-      width: 120,
+      width: calculateColumnWidths.date,
       sortable: true,
       essential: true,
       formatter: (value) => formatters.date(value),
@@ -111,7 +204,7 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
     {
       key: 'accountNumber',
       label: 'Account #',
-      width: 150,
+      width: calculateColumnWidths.accountNumber,
       sortable: true,
       essential: true,
       searchable: true,
@@ -119,7 +212,7 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
     {
       key: 'accountName',
       label: 'Account Name',
-      width: 200,
+      width: calculateColumnWidths.accountName,
       sortable: true,
       essential: true,
       searchable: true,
@@ -127,7 +220,7 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
     {
       key: 'portfolioValue',
       label: 'Portfolio Value',
-      width: 150,
+      width: calculateColumnWidths.portfolioValue,
       sortable: true,
       essential: true,
       align: 'right',
@@ -136,7 +229,7 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
     {
       key: 'totalCash',
       label: 'Total Cash',
-      width: 150,
+      width: calculateColumnWidths.totalCash,
       sortable: true,
       essential: true,
       align: 'right',
@@ -186,7 +279,7 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
       essential: false,
       formatter: (value) => formatters.date(value),
     },
-  ];
+  ], [calculateColumnWidths]);
 
   // Create table helpers
   const { sortData } = createVirtualTableHelpers<any>();
@@ -506,7 +599,7 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
               data={displayData}
               columns={columns}
               height={600}
-              rowHeight={50}
+              rowHeight={40}
               showAllColumns={showAllColumns}
               sortField={sortField}
               sortDirection={sortDirection}

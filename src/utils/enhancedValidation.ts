@@ -235,18 +235,24 @@ export class EnhancedFileValidator {
     data.forEach((row, index) => {
       // Handle both array format (raw CSV) and object format (extracted columns)
       let colCount: number;
+      let isObjectFormat = false;
+
       if (Array.isArray(row)) {
         colCount = row.length;
       } else if (typeof row === 'object' && row !== null) {
         // For objects, count non-empty properties
+        // Objects are already extracted/validated data, so we skip strict column count checks
+        isObjectFormat = true;
         colCount = Object.keys(row).filter(key => row[key] !== '' && row[key] !== null && row[key] !== undefined).length;
       } else {
         colCount = 0;
       }
+
       columnCounts.set(colCount, (columnCounts.get(colCount) || 0) + 1);
 
-      // Only warn if column count doesn't match expected AND it's not zero (empty row)
-      if (colCount !== expectedColumns && colCount > 0) {
+      // Only validate column counts for raw array data, not for extracted objects
+      // Extracted objects have a different structure (only essential columns)
+      if (!isObjectFormat && colCount !== expectedColumns && colCount > 0) {
         if (Math.abs(colCount - expectedColumns) > 2) {
           critical.push({
             type: 'critical',
@@ -470,16 +476,8 @@ export class EnhancedFileValidator {
       });
     }
 
-    // Leading zero check
-    if (cleaned.startsWith('0') && cleaned.length > 1) {
-      warnings.push({
-        type: 'data_quality',
-        row: rowNum,
-        column: 'accountNumber',
-        message: `Account number starts with zero: ${accountNumber}`,
-        impact: 'low'
-      });
-    }
+    // Leading zeros are now allowed for various custodian formats
+    // No validation needed
 
     // Pattern validation
     if (cleaned === cleaned[0].repeat(cleaned.length)) {

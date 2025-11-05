@@ -19,12 +19,12 @@ export const FILE_CONFIG = {
 
 // Data Validation Configuration
 export const VALIDATION_CONFIG = {
-  // Account number validation
+  // Account number validation - lenient to support various custodian formats
   ACCOUNT_NUMBER: {
-    MIN_LENGTH: 8,
-    MAX_LENGTH: 9,
-    PATTERN: /^[1-9]\d{7,8}$/,
-    ERROR_MESSAGE: 'Account number must be 8-9 digits and cannot start with 0',
+    MIN_LENGTH: 6,
+    MAX_LENGTH: 15,
+    PATTERN: /^\d{6,15}$/,
+    ERROR_MESSAGE: 'Account number must be 6-15 digits',
   },
 
   // Expected data volumes for validation warnings

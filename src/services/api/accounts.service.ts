@@ -45,24 +45,50 @@ export const accountsService = {
   // Get all accounts
   async getAll(firmId: string): Promise<ApiResponse<Account[]>> {
     try {
-      const { data, error } = await supabase
-        .from('accounts')
-        .select(`
-          *,
-          clients:client_id (
-            full_legal_name
-          )
-        `)
-        .eq('firm_id', firmId)
-        .order('account_number', { ascending: true });
+      // Supabase has a hard limit of 1000 rows per query, so we need to paginate
+      const PAGE_SIZE = 1000;
+      let allData: any[] = [];
+      let currentPage = 0;
+      let hasMore = true;
 
-      if (error) {
-        console.error('Error fetching accounts:', error);
-        return { error: error.message };
+      while (hasMore) {
+        const start = currentPage * PAGE_SIZE;
+        const end = start + PAGE_SIZE - 1;
+
+        const { data, error } = await supabase
+          .from('accounts')
+          .select(`
+            *,
+            clients:client_id (
+              full_legal_name
+            )
+          `)
+          .eq('firm_id', firmId)
+          .order('account_number', { ascending: true })
+          .range(start, end);
+
+        if (error) {
+          console.error('Error fetching accounts:', error);
+          return { error: error.message };
+        }
+
+        if (data && data.length > 0) {
+          allData = allData.concat(data);
+        }
+
+        // If we got less than PAGE_SIZE records, we've reached the end
+        hasMore = data && data.length === PAGE_SIZE;
+        currentPage++;
+
+        // Safety check to prevent infinite loops
+        if (currentPage > 100) {
+          console.warn('[accountsService.getAll] Hit safety limit of 100 pages');
+          break;
+        }
       }
 
       // Map the data and populate clientName from the join
-      const accounts = (data || []).map((account: any) => {
+      const accounts = allData.map((account: any) => {
         const mapped = dbToAccount(account);
         // Populate clientName from the joined clients table
         if (account.clients && account.clients.full_legal_name) {

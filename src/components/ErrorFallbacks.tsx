@@ -101,7 +101,7 @@ export const CsvImportErrorFallback: React.FC<ErrorFallbackProps> = ({
       <strong>Troubleshooting Tips:</strong>
       <ul style={{ marginTop: '8px', paddingLeft: '20px', lineHeight: '1.4' }}>
         <li>Ensure your CSV file has {APP_CONFIG.FILE.BALANCE_FILE_COLUMNS} columns for Balance files or {APP_CONFIG.FILE.POSITIONS_FILE_COLUMNS} columns for Position files</li>
-        <li>Check that account numbers are {APP_CONFIG.VALIDATION.ACCOUNT_NUMBER.MIN_LENGTH}-{APP_CONFIG.VALIDATION.ACCOUNT_NUMBER.MAX_LENGTH} digits and don't start with 0</li>
+        <li>Check that account numbers are {APP_CONFIG.VALIDATION.ACCOUNT_NUMBER.MIN_LENGTH}-{APP_CONFIG.VALIDATION.ACCOUNT_NUMBER.MAX_LENGTH} digits</li>
         <li>Verify the file size is under {APP_CONFIG.FILE.MAX_FILE_SIZE_MB}MB</li>
         <li>Make sure the file is in CSV format</li>
       </ul>

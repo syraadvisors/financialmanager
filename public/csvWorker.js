@@ -138,11 +138,13 @@ function validateData(data, fileType) {
         continue;
       }
 
-      // Basic account number validation
+      // Basic account number validation - more lenient to accept various formats
       const cleaned = accountNumber.replace(/\s/g, '');
-      if (!/^\d{8,9}$/.test(cleaned) || cleaned.startsWith('0')) {
+      // Accept account numbers that are 6-15 digits (covers various custodian formats)
+      // Allow numbers starting with 0 (some custodians use leading zeros)
+      if (!/^\d{6,15}$/.test(cleaned)) {
         if (errors.length < FILE_CONFIG.MAX_ERRORS_DISPLAYED) {
-          errors.push(`Row ${rowNum}: Invalid account number format (${accountNumber})`);
+          errors.push(`Row ${rowNum}: Invalid account number format (${accountNumber}) - must be 6-15 digits`);
         }
         continue;
       }
@@ -258,21 +260,41 @@ self.onmessage = function(e) {
 
             // Get the actual column count, ignoring trailing empty columns
             // This handles CSV files with trailing commas
-            let actualColumnCount = results.data[0].length;
-            const firstRow = results.data[0];
+            // Check all rows to find columns that are COMPLETELY empty (no data in any row)
+            const rawColumnCount = results.data[0].length;
+            let actualColumnCount = rawColumnCount;
 
-            // Count backwards from the end to find the last non-empty column
-            for (let i = firstRow.length - 1; i >= 0; i--) {
-              const value = (firstRow[i] || '').toString().trim();
-              if (value !== '') {
-                actualColumnCount = i + 1;
+            // For each column from right to left, check if it's empty in ALL rows
+            for (let colIndex = rawColumnCount - 1; colIndex >= 0; colIndex--) {
+              let hasAnyData = false;
+
+              // Check this column across all rows (or first 100 rows for performance)
+              const rowsToCheck = Math.min(100, results.data.length);
+              for (let rowIndex = 0; rowIndex < rowsToCheck; rowIndex++) {
+                const row = results.data[rowIndex];
+                const value = (row[colIndex] || '').toString().trim();
+
+                if (value !== '') {
+                  hasAnyData = true;
+                  break;
+                }
+              }
+
+              // If this column has any data, stop here - this is our actual column count
+              if (hasAnyData) {
+                actualColumnCount = colIndex + 1;
                 break;
               }
-              // If we reach a point where we've only seen empty columns, reduce the count
-              if (i < firstRow.length - 1 && value === '') {
-                actualColumnCount = i + 1;
-              }
             }
+
+            // Strip trailing empty columns from all rows to ensure consistency
+            processedData = processedData.map(row => {
+              // If row has more columns than actualColumnCount, trim it
+              if (row.length > actualColumnCount) {
+                return row.slice(0, actualColumnCount);
+              }
+              return row;
+            });
 
             const columnCount = actualColumnCount;
             const fileType = detectFileTypeByColumnCount(columnCount);
