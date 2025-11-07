@@ -17,8 +17,12 @@ import { useFirm } from '../contexts/FirmContext';
 import { accountsService } from '../services/api/accounts.service';
 import { masterAccountsService } from '../services/api/masterAccounts.service';
 import { householdsService } from '../services/api/households.service';
+import { clientsService } from '../services/api/clients.service';
+import { feeSchedulesService } from '../services/api/feeSchedules.service';
 import { MasterAccount } from '../types/MasterAccount';
 import { Household } from '../types/Household';
+import { Client } from '../types/Client';
+import { FeeSchedule } from '../types/FeeSchedule';
 
 const AccountsPage: React.FC = () => {
   const { firmId } = useFirm();
@@ -35,6 +39,8 @@ const AccountsPage: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [masterAccounts, setMasterAccounts] = useState<MasterAccount[]>([]);
   const [households, setHouseholds] = useState<Household[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [feeSchedules, setFeeSchedules] = useState<FeeSchedule[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Fetch accounts, master accounts, and households from Supabase
@@ -68,20 +74,33 @@ const AccountsPage: React.FC = () => {
         console.error('Failed to fetch households:', householdsResponse.error);
       }
 
+      // Fetch clients
+      const clientsResponse = await clientsService.getAll();
+      if (clientsResponse.data) {
+        setClients(clientsResponse.data);
+      } else if (clientsResponse.error) {
+        console.error('Failed to fetch clients:', clientsResponse.error);
+      }
+
+      // Fetch fee schedules
+      const feeSchedulesResponse = await feeSchedulesService.getAll(firmId);
+      if (feeSchedulesResponse.data) {
+        setFeeSchedules(feeSchedulesResponse.data);
+      } else if (feeSchedulesResponse.error) {
+        console.error('Failed to fetch fee schedules:', feeSchedulesResponse.error);
+      }
+
       setLoading(false);
     };
 
     fetchData();
   }, [firmId]);
 
-  // Mock clients for assignment dropdown
-  const mockClients = [
-    { id: '1', name: 'John Smith' },
-    { id: '2', name: 'Smith Family Trust' },
-    { id: '3', name: 'Tech Startup LLC' },
-    { id: '4', name: 'Jane Doe' },
-    { id: '5', name: 'Robert Johnson' },
-  ];
+  // Transform clients for assignment dropdown (map full_legal_name to name for consistency)
+  const availableClients = clients.map(c => ({
+    id: c.id,
+    name: c.fullLegalName
+  }));
 
   // Transform households for account form (convert to simple name format)
   const availableHouseholds = households.map(h => ({
@@ -89,12 +108,11 @@ const AccountsPage: React.FC = () => {
     name: h.householdName
   }));
 
-  // Mock fee schedules for account form
-  const mockFeeSchedules = [
-    { id: 'FS-001', name: 'Standard Tiered' },
-    { id: 'FS-002', name: 'Premium Flat' },
-    { id: 'FS-003', name: 'Corporate Standard' },
-  ];
+  // Transform fee schedules for account form (map schedule_name to name for consistency)
+  const availableFeeSchedules = feeSchedules.map(fs => ({
+    id: fs.id,
+    name: fs.name
+  }));
 
   const handleAddAccount = () => {
     setEditingAccount(null);
@@ -158,7 +176,7 @@ const AccountsPage: React.FC = () => {
   const handleAssignAccount = async (clientId: string) => {
     if (!selectedAccount || !firmId) return;
 
-    const selectedClient = mockClients.find(c => c.id === clientId);
+    const selectedClient = availableClients.find(c => c.id === clientId);
     if (!selectedClient) return;
 
     const response = await accountsService.update(selectedAccount.id, {
@@ -214,7 +232,7 @@ const AccountsPage: React.FC = () => {
   const handleLinkAccount = async (accountData: { accountNumber: string; clientId: string }) => {
     if (!firmId) return;
 
-    const selectedClient = mockClients.find(c => c.id === accountData.clientId);
+    const selectedClient = availableClients.find(c => c.id === accountData.clientId);
     if (!selectedClient) return;
 
     const response = await accountsService.create({
@@ -830,7 +848,7 @@ const AccountsPage: React.FC = () => {
       {isAssignModalOpen && selectedAccount && (
         <AssignAccountModal
           account={selectedAccount}
-          clients={mockClients}
+          clients={availableClients}
           onAssign={handleAssignAccount}
           onClose={() => {
             setIsAssignModalOpen(false);
@@ -854,7 +872,7 @@ const AccountsPage: React.FC = () => {
       {/* Link Account Modal */}
       {isLinkAccountModalOpen && (
         <LinkAccountModal
-          clients={mockClients}
+          clients={availableClients}
           onLink={handleLinkAccount}
           onClose={() => setIsLinkAccountModalOpen(false)}
         />
@@ -869,9 +887,9 @@ const AccountsPage: React.FC = () => {
         }}
         onSave={handleSaveAccount}
         account={editingAccount}
-        availableClients={mockClients}
+        availableClients={availableClients}
         availableHouseholds={availableHouseholds}
-        availableFeeSchedules={mockFeeSchedules}
+        availableFeeSchedules={availableFeeSchedules}
         availableMasterAccounts={masterAccounts}
       />
     </div>

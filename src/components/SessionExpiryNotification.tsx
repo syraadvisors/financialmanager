@@ -3,7 +3,7 @@ import { Clock, AlertCircle, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const SessionExpiryNotification: React.FC = () => {
-  const { sessionExpiresAt, signOut } = useAuth();
+  const { sessionExpiresAt, signOut, sessionRefreshFailed } = useAuth();
   const [timeRemaining, setTimeRemaining] = useState<string>('');
   const [showWarning, setShowWarning] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -19,8 +19,10 @@ const SessionExpiryNotification: React.FC = () => {
       const expiresAt = sessionExpiresAt.getTime();
       const remaining = expiresAt - now;
 
-      // Show warning if less than 10 minutes remaining
-      if (remaining > 0 && remaining < 10 * 60 * 1000) {
+      // Only show warning if:
+      // 1. Less than 3 minutes remaining (critical time)
+      // 2. AND the session refresh has failed (indicating a real problem)
+      if (remaining > 0 && remaining < 3 * 60 * 1000 && sessionRefreshFailed) {
         const minutes = Math.floor(remaining / 60000);
         const seconds = Math.floor((remaining % 60000) / 1000);
         setTimeRemaining(`${minutes}:${seconds.toString().padStart(2, '0')}`);
@@ -42,7 +44,7 @@ const SessionExpiryNotification: React.FC = () => {
     const interval = setInterval(updateTimer, 1000);
 
     return () => clearInterval(interval);
-  }, [sessionExpiresAt, signOut, dismissed]);
+  }, [sessionExpiresAt, signOut, dismissed, sessionRefreshFailed]);
 
   if (!showWarning) return null;
 
@@ -95,8 +97,8 @@ const SessionExpiryNotification: React.FC = () => {
           </strong>
         </div>
         <p style={{ margin: '0 0 12px 0', color: '#856404', fontSize: '13px', lineHeight: '1.4' }}>
-          Your session will expire in <strong>{timeRemaining}</strong>.
-          Please save your work. Your session will be automatically refreshed if possible.
+          Your session could not be refreshed and will expire in <strong>{timeRemaining}</strong>.
+          Please save your work. You will need to log in again.
         </p>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button

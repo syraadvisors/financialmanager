@@ -1,6 +1,8 @@
-import React, { useState, useMemo, memo, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useMemo, memo, useCallback, Suspense, lazy, useEffect } from 'react';
 import { Search, Eye, EyeOff, SortAsc, SortDesc, TrendingUp, DollarSign, Zap } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
+import { importedPositionsDataService } from '../services/api/importedPositionsData.service';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { DataProcessingErrorFallback } from '../components/ErrorFallbacks';
 import ExportButton from '../components/ExportButton';
@@ -19,6 +21,7 @@ interface PositionsDataPageProps {
 
 const PositionsDataPage: React.FC<PositionsDataPageProps> = memo(({ onExportData }) => {
   const { state } = useAppContext();
+  const { userProfile } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<string>('marketValue');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -27,16 +30,55 @@ const PositionsDataPage: React.FC<PositionsDataPageProps> = memo(({ onExportData
   const [useVirtualScrolling, setUseVirtualScrolling] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 25;
+  const [databaseData, setDatabaseData] = useState<any[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
 
   const { positionsData } = state;
 
-  // Add console logging to debug data structure
-  console.log('[PositionsDataPage] positionsData length:', positionsData?.length);
-  console.log('[PositionsDataPage] first position:', positionsData?.[0]);
+  // Load positions data from database on mount
+  useEffect(() => {
+    const loadPositionsData = async () => {
+      if (!userProfile?.firmId) {
+        setIsLoadingData(false);
+        return;
+      }
 
-  // Safety check: ensure positionsData is an array
-  if (!Array.isArray(positionsData)) {
-    console.error('[PositionsDataPage] ERROR: positionsData is not an array!', typeof positionsData, positionsData);
+      console.log('[PositionsDataPage] Loading positions data from database for firm:', userProfile.firmId);
+      setIsLoadingData(true);
+
+      const response = await importedPositionsDataService.getAll(userProfile.firmId);
+
+      console.log('[PositionsDataPage] Got response from database:', {
+        dataLength: response.data?.length,
+        hasError: !!response.error,
+        error: response.error,
+        firstRecord: response.data?.[0]
+      });
+
+      if (response.data) {
+        setDatabaseData(response.data);
+      } else {
+        console.log('[PositionsDataPage] No data returned or error occurred');
+        setDatabaseData([]);
+      }
+      setIsLoadingData(false);
+    };
+
+    loadPositionsData();
+  }, [userProfile?.firmId]);
+
+  // Use database data if available, otherwise fall back to context data
+  const activePositionsData = databaseData.length > 0 ? databaseData : positionsData;
+
+  // Add console logging to debug data structure
+  console.log('[PositionsDataPage] activePositionsData length:', activePositionsData?.length);
+  console.log('[PositionsDataPage] databaseData length:', databaseData?.length);
+  console.log('[PositionsDataPage] context positionsData length:', positionsData?.length);
+  console.log('[PositionsDataPage] first position:', activePositionsData?.[0]);
+
+  // Safety check: ensure activePositionsData is an array
+  if (!Array.isArray(activePositionsData)) {
+    console.error('[PositionsDataPage] ERROR: activePositionsData is not an array!', typeof activePositionsData, activePositionsData);
     return (
       <div style={{
         padding: '32px',
@@ -56,7 +98,7 @@ const PositionsDataPage: React.FC<PositionsDataPageProps> = memo(({ onExportData
             The positions data is not in the correct format. Please try re-importing the file.
           </p>
           <p style={{ color: '#666', fontSize: '12px', marginTop: '16px' }}>
-            Expected an array but got: {typeof positionsData}
+            Expected an array but got: {typeof activePositionsData}
           </p>
         </div>
       </div>
@@ -65,17 +107,17 @@ const PositionsDataPage: React.FC<PositionsDataPageProps> = memo(({ onExportData
 
   // Get unique security types for filter
   const securityTypes = useMemo(() => {
-    if (!Array.isArray(positionsData)) {
-      console.error('[PositionsDataPage] positionsData is not an array:', positionsData);
+    if (!Array.isArray(activePositionsData)) {
+      console.error('[PositionsDataPage] activePositionsData is not an array:', activePositionsData);
       return [];
     }
-    const types = new Set(positionsData.map(pos => pos?.securityType).filter(Boolean));
+    const types = new Set(activePositionsData.map(pos => pos?.securityType).filter(Boolean));
     return Array.from(types).sort();
-  }, [positionsData]);
+  }, [activePositionsData]);
 
   // Filter data (sorting handled by virtual table)
   const filteredData = useMemo(() => {
-    return positionsData.filter(position => {
+    return activePositionsData.filter(position => {
       // Search filter
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();
@@ -96,7 +138,7 @@ const PositionsDataPage: React.FC<PositionsDataPageProps> = memo(({ onExportData
 
       return true;
     });
-  }, [positionsData, searchTerm, filterType]);
+  }, [activePositionsData, searchTerm, filterType]);
 
   // Sorted data for virtual scrolling
   const processedData = useMemo(() => {
@@ -240,7 +282,19 @@ const PositionsDataPage: React.FC<PositionsDataPageProps> = memo(({ onExportData
 
   const visibleColumns = showAllColumns ? legacyColumns : legacyColumns.filter(col => col.essential);
 
-  if (positionsData.length === 0) {
+  if (isLoadingData) {
+    return (
+      <div style={{
+        padding: '32px',
+        backgroundColor: '#fafafa',
+        minHeight: '100vh',
+      }}>
+        <LoadingSkeleton type="table" count={10} />
+      </div>
+    );
+  }
+
+  if (activePositionsData.length === 0) {
     return (
       <div style={{
         padding: '32px',

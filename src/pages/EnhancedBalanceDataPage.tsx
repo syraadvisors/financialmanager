@@ -8,7 +8,6 @@ import ErrorBoundary from '../components/ErrorBoundary';
 import { DataProcessingErrorFallback } from '../components/ErrorFallbacks';
 import SearchableVirtualTable, { SearchableTableColumn } from '../components/SearchableVirtualTable';
 import { createVirtualTableHelpers, formatters } from '../components/VirtualScrollTable';
-import UndoRedoControls from '../components/UndoRedoControls';
 
 interface EnhancedBalanceDataPageProps {
   onExportData?: (data: any[], format: 'csv' | 'excel') => void;
@@ -395,6 +394,8 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
       padding: '24px',
       backgroundColor: '#fafafa',
       minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
     }}>
       {/* Page Header */}
       <div style={{
@@ -404,6 +405,7 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
         justifyContent: 'space-between',
         flexWrap: 'wrap',
         gap: '16px',
+        flexShrink: 0,
       }}>
         <div>
           <h1 style={{
@@ -414,21 +416,18 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
           }}>
             Account Balances
           </h1>
-          <p style={{
-            color: '#666',
-            fontSize: '14px',
-            margin: 0,
-          }}>
-            {isFiltering
-              ? `Showing ${displayData.length} of ${balanceData.length} accounts`
-              : `${displayData.length} accounts loaded`
-            }
-          </p>
+          {isFiltering && (
+            <p style={{
+              color: '#666',
+              fontSize: '14px',
+              margin: 0,
+            }}>
+              Showing {displayData.length} of {balanceData.length} accounts
+            </p>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <UndoRedoControls variant="horizontal" size="small" showLabels={false} />
-
           {/* Date Filter */}
           {availableDates.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -535,6 +534,7 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
           gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
           gap: '16px',
           marginBottom: '24px',
+          flexShrink: 0,
         }}>
           <div style={{
             backgroundColor: 'white',
@@ -589,46 +589,34 @@ const EnhancedBalanceDataPage: React.FC<EnhancedBalanceDataPageProps> = ({ onExp
       )}
 
       {/* Data Table */}
-      <ErrorBoundary fallback={<DataProcessingErrorFallback />}>
-        {(() => {
-          console.log('[EnhancedBalanceDataPage] About to render SearchableVirtualTable');
-          console.log('[EnhancedBalanceDataPage] displayData:', displayData);
-          console.log('[EnhancedBalanceDataPage] columns:', columns);
-          return (
-            <SearchableVirtualTable
-              data={displayData}
-              columns={columns}
-              height={600}
-              rowHeight={40}
-              showAllColumns={showAllColumns}
-              sortField={sortField}
-              sortDirection={sortDirection}
-              onSort={handleSort}
-              onRowClick={handleRowClick}
-              loading={appState.isLoading}
-              enableHighlighting={true}
-              showSearchIndicator={true}
-              overscanCount={10}
-            />
-          );
-        })()}
-      </ErrorBoundary>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <ErrorBoundary fallback={<DataProcessingErrorFallback />}>
+          {(() => {
+            console.log('[EnhancedBalanceDataPage] About to render SearchableVirtualTable');
+            console.log('[EnhancedBalanceDataPage] displayData:', displayData);
+            console.log('[EnhancedBalanceDataPage] columns:', columns);
+            return (
+              <SearchableVirtualTable
+                data={displayData}
+                columns={columns}
+                height="100%"
+                rowHeight={40}
+                showAllColumns={showAllColumns}
+                sortField={sortField}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                onRowClick={handleRowClick}
+                loading={appState.isLoading}
+                enableHighlighting={true}
+                showSearchIndicator={true}
+                overscanCount={10}
+              />
+            );
+          })()}
+        </ErrorBoundary>
+      </div>
 
       {/* Performance Info */}
-      {process.env.NODE_ENV === 'development' && (
-        <div style={{
-          marginTop: '16px',
-          padding: '12px',
-          backgroundColor: '#e3f2fd',
-          borderRadius: '4px',
-          fontSize: '12px',
-          color: '#1976d2',
-        }}>
-          <strong>Dev Info:</strong> Showing {displayData.length} rows with virtual scrolling
-          {searchState.globalQuery && ` • Search: "${searchState.globalQuery}"`}
-          {searchState.activeFilters.length > 0 && ` • ${searchState.activeFilters.length} filters active`}
-        </div>
-      )}
     </div>
   );
 };

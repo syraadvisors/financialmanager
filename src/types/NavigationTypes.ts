@@ -20,7 +20,8 @@ export enum PageType {
   SETTINGS = 'settings',
   FIRM_SETTINGS = 'firm-settings',
   USER_MANAGEMENT = 'user-management',
-  AUDIT_LOGS = 'audit-logs'
+  AUDIT_LOGS = 'audit-logs',
+  APP_SUPPORT = 'app-support'
 }
 
 export interface NavigationItem {

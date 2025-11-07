@@ -14,6 +14,7 @@ interface AuthContextType {
   hasRole: (role: UserRole) => boolean;
   refreshProfile: () => Promise<void>;
   sessionExpiresAt: Date | null;
+  sessionRefreshFailed: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -24,10 +25,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionExpiresAt, setSessionExpiresAt] = useState<Date | null>(null);
+  const [sessionRefreshFailed, setSessionRefreshFailed] = useState(false);
 
   const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
   const expiryWarningShownRef = useRef(false);
   const sessionRef = useRef<Session | null>(null);
+  const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastActivityRef = useRef<number>(Date.now());
 
   // Keep sessionRef updated
   useEffect(() => {
@@ -176,15 +180,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const { data, error } = await supabase.auth.refreshSession();
           if (error) {
             console.error('[AuthContext] Error refreshing session:', error);
+            // Mark refresh as failed
+            setSessionRefreshFailed(true);
             // Session expired, sign out
             await signOut('expired');
           } else if (data.session) {
             console.log('[AuthContext] Session refreshed successfully');
+            setSessionRefreshFailed(false);
             setSession(data.session);
             setupTokenRefresh(data.session);
           }
         } catch (err) {
           console.error('[AuthContext] Exception refreshing session:', err);
+          setSessionRefreshFailed(true);
           await signOut('error');
         }
       }, refreshTime);
@@ -198,8 +206,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         supabase.auth.refreshSession().then(({ data, error }) => {
           if (error || !data.session) {
             console.error('[AuthContext] Unable to refresh expiring session');
+            setSessionRefreshFailed(true);
           } else {
             expiryWarningShownRef.current = false;
+            setSessionRefreshFailed(false);
             setupTokenRefresh(data.session);
           }
         });
@@ -207,8 +217,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } else {
       // Session already expired
       console.warn('[AuthContext] Session already expired');
+      setSessionRefreshFailed(true);
       signOut('expired');
     }
+  }, []);
+
+  // Setup inactivity timeout (30 minutes)
+  const setupInactivityTimeout = useCallback(() => {
+    const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
+
+    const resetInactivityTimer = () => {
+      // Clear existing timer
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+
+      // Update last activity time
+      lastActivityRef.current = Date.now();
+
+      // Set new timer
+      inactivityTimerRef.current = setTimeout(() => {
+        console.log('[AuthContext] User inactive for 30 minutes, logging out...');
+        signOut('expired');
+      }, INACTIVITY_TIMEOUT);
+    };
+
+    // Activity event handlers
+    const handleActivity = () => {
+      resetInactivityTimer();
+    };
+
+    // Monitor user activity
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+    events.forEach(event => {
+      window.addEventListener(event, handleActivity, true);
+    });
+
+    // Start the initial timer
+    resetInactivityTimer();
+
+    // Cleanup function
+    return () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+      events.forEach(event => {
+        window.removeEventListener(event, handleActivity, true);
+      });
+    };
   }, []);
 
   // Monitor session validity
@@ -223,6 +279,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
   }, [session, setupTokenRefresh]);
+
+  // Setup inactivity timeout when user is logged in
+  useEffect(() => {
+    if (user) {
+      const cleanup = setupInactivityTimeout();
+      return cleanup;
+    } else {
+      // Clear inactivity timer when user logs out
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+        inactivityTimerRef.current = null;
+      }
+    }
+  }, [user, setupInactivityTimeout]);
 
   useEffect(() => {
     // Check active sessions and sets the user
@@ -272,6 +342,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (refreshTimerRef.current) {
       clearTimeout(refreshTimerRef.current);
       refreshTimerRef.current = null;
+    }
+
+    // Clear inactivity timer
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+      inactivityTimerRef.current = null;
     }
 
     // Show appropriate message based on reason
@@ -332,6 +408,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     hasRole,
     refreshProfile,
     sessionExpiresAt,
+    sessionRefreshFailed,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

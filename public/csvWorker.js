@@ -52,8 +52,8 @@ function detectFileTypeByColumnCount(columnCount) {
     return 'POSITIONS';
   }
   else if (columnCount >= FILE_CONFIG.MIN_BALANCE_COLUMNS && columnCount <= FILE_CONFIG.BALANCE_FILE_COLUMNS && columnCount > FILE_CONFIG.POSITIONS_FILE_COLUMNS) {
-    // 13-21 columns = balance file
-    return 'ACCOUNT_BALANCE';
+    // 13-21 columns = could be balance OR positions (positions files sometimes have extra columns)
+    return 'AMBIGUOUS';
   }
   else if (columnCount >= FILE_CONFIG.MIN_POSITIONS_COLUMNS && columnCount < FILE_CONFIG.POSITIONS_FILE_COLUMNS) {
     // 5-11 columns = positions file (partial/missing columns)
@@ -65,10 +65,44 @@ function detectFileTypeByColumnCount(columnCount) {
   if (columnCount <= 12) {
     return 'POSITIONS';
   } else if (columnCount > 12) {
-    return 'ACCOUNT_BALANCE';
+    return 'AMBIGUOUS';
   }
 
   return 'UNKNOWN';
+}
+
+// Content-based file type detection
+function detectFileTypeByContent(firstRow) {
+  // Convert first row to uppercase for comparison
+  const upperRow = firstRow.map(cell => (cell || '').toString().trim().toUpperCase());
+
+  // Positions file indicators - look for these keywords
+  const positionsKeywords = ['SYMBOL', 'SECURITY', 'SHARES', 'QUANTITY', 'PRICE', 'LONG', 'SHORT', 'DEBT', 'EQUITY'];
+
+  // Balance file indicators
+  const balanceKeywords = ['PORTFOLIO', 'TOTAL', 'BALANCE', 'MARKET VALUE', 'BUYING POWER', 'MARGIN'];
+
+  let positionsScore = 0;
+  let balanceScore = 0;
+
+  upperRow.forEach(cell => {
+    positionsKeywords.forEach(keyword => {
+      if (cell.includes(keyword)) positionsScore++;
+    });
+    balanceKeywords.forEach(keyword => {
+      if (cell.includes(keyword)) balanceScore++;
+    });
+  });
+
+  console.log('Content detection scores - Positions:', positionsScore, 'Balance:', balanceScore);
+
+  if (positionsScore > balanceScore) {
+    return 'POSITIONS';
+  } else if (balanceScore > positionsScore) {
+    return 'ACCOUNT_BALANCE';
+  }
+
+  return null; // Couldn't determine
 }
 
 function extractRequiredColumns(data, fileType) {
@@ -297,14 +331,28 @@ self.onmessage = function(e) {
             });
 
             const columnCount = actualColumnCount;
-            const fileType = detectFileTypeByColumnCount(columnCount);
+            let fileType = detectFileTypeByColumnCount(columnCount);
 
             console.log('CSV Worker - Raw column count:', results.data[0].length);
             console.log('CSV Worker - Actual column count (excluding trailing empty):', columnCount);
-            console.log('CSV Worker - Detected file type:', fileType);
+            console.log('CSV Worker - Initial file type detection (by column count):', fileType);
             console.log('CSV Worker - First row sample:', results.data[0].slice(0, 5));
 
-            if (fileType === 'UNKNOWN') {
+            // If ambiguous, use content-based detection
+            if (fileType === 'AMBIGUOUS' && processedData.length > 0) {
+              console.log('CSV Worker - Column count is ambiguous, checking content...');
+              const contentType = detectFileTypeByContent(processedData[0]);
+              if (contentType) {
+                fileType = contentType;
+                console.log('CSV Worker - Content-based detection result:', fileType);
+              } else {
+                // Default to balance if we can't determine
+                fileType = 'ACCOUNT_BALANCE';
+                console.log('CSV Worker - Could not determine from content, defaulting to ACCOUNT_BALANCE');
+              }
+            }
+
+            if (fileType === 'UNKNOWN' || fileType === 'AMBIGUOUS') {
               self.postMessage({
                 type: 'error',
                 error: `Unable to determine file type. File has ${columnCount} columns.`
@@ -312,10 +360,15 @@ self.onmessage = function(e) {
               return;
             }
 
+            console.log('CSV Worker - Final detected file type:', fileType);
+
             // Check if first row is a header (contains text in columns that should be numeric)
             if (processedData.length > 0) {
               const firstRow = processedData[0];
               let isHeaderRow = false;
+
+              console.log('Worker: Checking for header row. File type:', fileType);
+              console.log('Worker: First row (first 12 columns):', firstRow.slice(0, 12));
 
               if (fileType === 'ACCOUNT_BALANCE') {
                 // Check if portfolio value column (index 4) or total cash column (index 6) contains non-numeric text
@@ -332,18 +385,46 @@ self.onmessage = function(e) {
                   console.log('Worker: Detected header row in Balance file - skipping first row');
                 }
               } else if (fileType === 'POSITIONS') {
-                // Check if number of shares column (index 7) or market value column (index 11) contains non-numeric text
-                const sharesCell = (firstRow[7] || '').toString().trim();
-                const marketValueCell = (firstRow[11] || '').toString().trim();
+                // Check multiple columns for header keywords
+                const sharesCell = (firstRow[7] || '').toString().trim().toUpperCase();
+                const marketValueCell = (firstRow[11] || '').toString().trim().toUpperCase();
+                const securityTypeCell = (firstRow[4] || '').toString().trim().toUpperCase();
+                const symbolCell = (firstRow[3] || '').toString().trim().toUpperCase();
 
-                // If these cells contain text that doesn't parse to a number, it's likely a header row
-                isHeaderRow = (
-                  (sharesCell && isNaN(parseFloat(sharesCell.replace(/[,]/g, '')))) ||
-                  (marketValueCell && isNaN(parseFloat(marketValueCell.replace(/[,$]/g, ''))))
+                console.log('Worker: Positions header check - Column 4 (securityType):', securityTypeCell);
+                console.log('Worker: Positions header check - Column 7 (shares):', sharesCell);
+                console.log('Worker: Positions header check - Column 11 (marketValue):', marketValueCell);
+
+                // Common header keywords for positions files
+                const headerKeywords = ['SHARES', 'MARKET', 'VALUE', 'DEBT', 'EQUITY', 'CASH', 'SYMBOL', 'SECURITY', 'TYPE', 'DESCRIPTION', 'PRICE', 'QUANTITY'];
+
+                // Check if any numeric column contains header keywords
+                isHeaderRow = headerKeywords.some(keyword =>
+                  sharesCell.includes(keyword) ||
+                  marketValueCell.includes(keyword) ||
+                  securityTypeCell.includes(keyword)
                 );
 
+                console.log('Worker: Header keyword match result:', isHeaderRow);
+
+                // Also check if numeric columns fail to parse as numbers
+                if (!isHeaderRow) {
+                  const sharesIsNum = !isNaN(parseFloat(sharesCell.replace(/[,]/g, '')));
+                  const marketValueIsNum = !isNaN(parseFloat(marketValueCell.replace(/[,$]/g, '')));
+                  console.log('Worker: Shares parses as number?', sharesIsNum, 'MarketValue parses as number?', marketValueIsNum);
+
+                  isHeaderRow = (
+                    (sharesCell && !sharesIsNum) ||
+                    (marketValueCell && !marketValueIsNum)
+                  );
+                  console.log('Worker: Non-numeric check result:', isHeaderRow);
+                }
+
                 if (isHeaderRow) {
-                  console.log('Worker: Detected header row in Positions file - skipping first row');
+                  console.log('Worker: ✓ Detected header row in Positions file - skipping first row');
+                  console.log('Worker: First row content:', firstRow.slice(0, 12));
+                } else {
+                  console.log('Worker: ✗ Did NOT detect header row - treating first row as data');
                 }
               }
 

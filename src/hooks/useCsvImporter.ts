@@ -213,22 +213,41 @@ export const useCsvImporter = (onDataImported: (data: any[], fileType: FileType,
             return;
           }
 
-          // Balance files have header rows, Position files do not
           // Check if first row is a header (contains text in columns that should be numeric)
-          if (detectedType === FileType.ACCOUNT_BALANCE && processedData.length > 0) {
+          if (processedData.length > 0) {
             const firstRow = processedData[0];
-            // Check if portfolio value column (index 4) or total cash column (index 6) contains non-numeric text
-            const portfolioValueCell = (firstRow[4] || '').toString().trim();
-            const totalCashCell = (firstRow[6] || '').toString().trim();
+            let isHeaderRow = false;
 
-            // If these cells contain text that doesn't parse to a number, it's likely a header row
-            const isHeaderRow = (
-              (portfolioValueCell && isNaN(parseFloat(portfolioValueCell.replace(/[,$]/g, '')))) ||
-              (totalCashCell && isNaN(parseFloat(totalCashCell.replace(/[,$]/g, ''))))
-            );
+            if (detectedType === FileType.ACCOUNT_BALANCE) {
+              // Check if portfolio value column (index 4) or total cash column (index 6) contains non-numeric text
+              const portfolioValueCell = (firstRow[4] || '').toString().trim();
+              const totalCashCell = (firstRow[6] || '').toString().trim();
+
+              // If these cells contain text that doesn't parse to a number, it's likely a header row
+              isHeaderRow = (
+                (portfolioValueCell && isNaN(parseFloat(portfolioValueCell.replace(/[,$]/g, '')))) ||
+                (totalCashCell && isNaN(parseFloat(totalCashCell.replace(/[,$]/g, ''))))
+              );
+            } else if (detectedType === FileType.POSITIONS) {
+              // Check if numeric columns contain non-numeric text (header keywords)
+              const sharesCell = (firstRow[7] || '').toString().trim().toUpperCase();
+              const marketValueCell = (firstRow[11] || '').toString().trim().toUpperCase();
+
+              // Check for header keywords or non-numeric values
+              const headerKeywords = ['SHARES', 'MARKET', 'VALUE', 'DEBT', 'EQUITY', 'CASH', 'SYMBOL', 'SECURITY', 'PRICE', 'QUANTITY'];
+              const hasHeaderKeywords = headerKeywords.some(keyword =>
+                sharesCell.includes(keyword) || marketValueCell.includes(keyword)
+              );
+
+              const sharesIsNonNumeric = sharesCell && isNaN(parseFloat(sharesCell.replace(/[,]/g, '')));
+              const marketValueIsNonNumeric = marketValueCell && isNaN(parseFloat(marketValueCell.replace(/[,$]/g, '')));
+
+              isHeaderRow = hasHeaderKeywords || sharesIsNonNumeric || marketValueIsNonNumeric;
+            }
 
             if (isHeaderRow) {
-              console.log('Detected header row in Balance file - skipping first row');
+              console.log(`Detected header row in ${detectedType} file - skipping first row`);
+              console.log('First row content:', firstRow.slice(0, 12));
               processedData = processedData.slice(1); // Skip the header row
             }
           }

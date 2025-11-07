@@ -7,18 +7,35 @@ export const householdsService = {
   // Get all households
   async getAll(firmId: string): Promise<ApiResponse<Household[]>> {
     try {
-      const { data, error } = await supabase
-        .from('households')
-        .select('*')
-        .eq('firm_id', firmId)
-        .order('household_name', { ascending: true });
+      // Fetch ALL households using pagination to avoid 1000 record limit
+      let allHouseholds: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
 
-      if (error) {
-        console.error('Error fetching households:', error);
-        return { error: error.message };
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('households')
+          .select('*')
+          .eq('firm_id', firmId)
+          .order('household_name', { ascending: true })
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) {
+          console.error('Error fetching households:', error);
+          return { error: error.message };
+        }
+
+        if (data && data.length > 0) {
+          allHouseholds = allHouseholds.concat(data);
+          page++;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
       }
 
-      return { data: mapToCamelCase<Household[]>(data) || [] };
+      return { data: mapToCamelCase<Household[]>(allHouseholds) || [] };
     } catch (err) {
       console.error('Unexpected error fetching households:', err);
       return { error: 'Failed to fetch households' };
@@ -53,18 +70,35 @@ export const householdsService = {
   // Get households by relationship ID
   async getByRelationshipId(relationshipId: string): Promise<ApiResponse<Household[]>> {
     try {
-      const { data, error } = await supabase
-        .from('households')
-        .select('*')
-        .eq('relationship_id', relationshipId)
-        .order('household_name', { ascending: true });
+      // Fetch ALL households using pagination to avoid 1000 record limit
+      let allHouseholds: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
 
-      if (error) {
-        console.error('Error fetching households by relationship:', error);
-        return { error: error.message };
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('households')
+          .select('*')
+          .eq('relationship_id', relationshipId)
+          .order('household_name', { ascending: true })
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) {
+          console.error('Error fetching households by relationship:', error);
+          return { error: error.message };
+        }
+
+        if (data && data.length > 0) {
+          allHouseholds = allHouseholds.concat(data);
+          page++;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
       }
 
-      return { data: mapToCamelCase<Household[]>(data) || [] };
+      return { data: mapToCamelCase<Household[]>(allHouseholds) || [] };
     } catch (err) {
       console.error('Unexpected error fetching households by relationship:', err);
       return { error: 'Failed to fetch households' };

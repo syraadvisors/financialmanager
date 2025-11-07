@@ -577,7 +577,7 @@ const AccountFormModal: React.FC<AccountFormModalProps> = ({
           </label>
           <input
             type="text"
-            value={currentBalance !== undefined ? `$${currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'No data'}
+            value={currentBalance !== undefined && currentBalance !== null ? `$${currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'No data'}
             readOnly
             disabled
             style={{

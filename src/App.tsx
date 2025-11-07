@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import './App.css';
 import './App.responsive.css';
@@ -90,14 +90,16 @@ const AuditLogsPage = createLazyComponent(
   'AuditLogsPage'
 );
 
+const AppSupportPage = createLazyComponent(
+  () => import('./pages/AppSupportPage'),
+  'AppSupportPage'
+);
+
 // Use the direct import (bypassing lazy loading as it was working)
 const SuperAdminDashboard = SuperAdminDashboardDirect;
 console.log('[App] SuperAdminDashboard component assigned:', SuperAdminDashboard, typeof SuperAdminDashboard);
 
 // Lazy load heavy components that are conditionally rendered
-const GlobalSearch = lazy(() => import('./components/GlobalSearch'));
-const AdvancedFilters = lazy(() => import('./components/AdvancedFilters'));
-const QuickFilters = lazy(() => import('./components/QuickFilters'));
 const CommandPalette = lazy(() => import('./components/CommandPalette'));
 const HelpModal = lazy(() => import('./components/HelpModal'));
 const SessionExpiryNotification = lazy(() => import('./components/SessionExpiryNotification'));
@@ -108,6 +110,7 @@ const AppContent: React.FC = () => {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [isNavCollapsed, setIsNavCollapsed] = useState(false);
+  const location = useLocation();
 
   // Initialize keyboard shortcuts
   useFinancialAppShortcuts();
@@ -116,6 +119,38 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     initializeBundleOptimization();
   }, []);
+
+  // Sync URL with AppContext state for backward compatibility
+  useEffect(() => {
+    const pathToPageType: Record<string, PageType> = {
+      '/app': PageType.OVERVIEW,
+      '/app/overview': PageType.OVERVIEW,
+      '/app/import': PageType.IMPORT,
+      '/app/balance-data': PageType.BALANCE_DATA,
+      '/app/positions-data': PageType.POSITIONS_DATA,
+      '/app/analytics': PageType.ANALYTICS,
+      '/app/history': PageType.HISTORY,
+      '/app/fee-calculator': PageType.FEE_CALCULATOR,
+      '/app/clients': PageType.CLIENTS,
+      '/app/accounts': PageType.ACCOUNTS,
+      '/app/master-accounts': PageType.MASTER_ACCOUNTS,
+      '/app/households': PageType.HOUSEHOLDS,
+      '/app/relationships': PageType.RELATIONSHIPS,
+      '/app/fee-schedules': PageType.FEE_SCHEDULES,
+      '/app/billing-fee-agreements': PageType.BILLING_FEE_AGREEMENTS,
+      '/app/billing-periods': PageType.BILLING_PERIODS,
+      '/app/fee-reports': PageType.FEE_REPORTS,
+      '/app/firm-settings': PageType.FIRM_SETTINGS,
+      '/app/user-management': PageType.USER_MANAGEMENT,
+      '/app/audit-logs': PageType.AUDIT_LOGS,
+      '/app/app-support': PageType.APP_SUPPORT,
+    };
+
+    const pageType = pathToPageType[location.pathname] || PageType.OVERVIEW;
+    if (state.currentPage !== pageType) {
+      setCurrentPage(pageType);
+    }
+  }, [location.pathname, state.currentPage, setCurrentPage]);
 
   // Handle custom events from keyboard shortcuts
   useEffect(() => {
@@ -164,77 +199,6 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const renderCurrentPage = () => {
-    switch (state.currentPage) {
-      case PageType.IMPORT:
-        return (
-          <ImportPage
-            onDataImported={handleDataImported}
-          />
-        );
-      case PageType.BALANCE_DATA:
-        return (
-          <BalanceDataPage
-            onExportData={handleExportData}
-          />
-        );
-      case PageType.POSITIONS_DATA:
-        return (
-          <PositionsDataPage
-            onExportData={handleExportData}
-          />
-        );
-      case PageType.ANALYTICS:
-        return (
-          <AnalyticsPage />
-        );
-      case PageType.HISTORY:
-        return (
-          <HistoryPage />
-        );
-      case PageType.FEE_CALCULATOR:
-      case PageType.CLIENTS:
-      case PageType.ACCOUNTS:
-      case PageType.MASTER_ACCOUNTS:
-      case PageType.HOUSEHOLDS:
-      case PageType.RELATIONSHIPS:
-      case PageType.FEE_SCHEDULES:
-      case PageType.BILLING_FEE_AGREEMENTS:
-      case PageType.BILLING_PERIODS:
-      case PageType.FEE_REPORTS:
-        return (
-          <FeeManagementPage activeTab={
-            state.currentPage === PageType.FEE_CALCULATOR ? 'calculator' :
-            state.currentPage === PageType.CLIENTS ? 'clients' :
-            state.currentPage === PageType.ACCOUNTS ? 'accounts' :
-            state.currentPage === PageType.MASTER_ACCOUNTS ? 'master-accounts' :
-            state.currentPage === PageType.HOUSEHOLDS ? 'households' :
-            state.currentPage === PageType.RELATIONSHIPS ? 'relationships' :
-            state.currentPage === PageType.FEE_SCHEDULES ? 'schedules' :
-            state.currentPage === PageType.BILLING_FEE_AGREEMENTS ? 'agreements' :
-            state.currentPage === PageType.BILLING_PERIODS ? 'billing' :
-            state.currentPage === PageType.FEE_REPORTS ? 'reports' : 'calculator'
-          } />
-        );
-      case PageType.FIRM_SETTINGS:
-        return <FirmSettingsPage />;
-      case PageType.USER_MANAGEMENT:
-        return <UserManagementPage />;
-      case PageType.AUDIT_LOGS:
-        return <AuditLogsPage />;
-      case PageType.OVERVIEW:
-      default:
-        return (
-          <OverviewPage
-            onExportData={(format: 'csv' | 'json' | 'excel') => {
-              const allData = [...state.balanceData, ...state.positionsData];
-              handleExportData(allData, format);
-            }}
-          />
-        );
-    }
-  };
-
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--bg-primary)' }}>
       {/* Impersonation Banner - Fixed at top */}
@@ -249,37 +213,40 @@ const AppContent: React.FC = () => {
         onToggleCollapse={setIsNavCollapsed}
       />
 
-      {/* Main Content */}
+      {/* Main Content with Nested Routes */}
       <div className={`app-main-content ${isNavCollapsed ? 'collapsed' : ''}`}>
-        {/* Global Search Bar */}
-        <div className="app-search-bar">
-          <Suspense fallback={<div style={{ height: '40px', backgroundColor: '#f5f5f5', borderRadius: '8px' }} />}>
-            <GlobalSearch
-              placeholder="Search accounts, positions, symbols... (Ctrl+F to focus)"
-              showResultsCount={true}
-              autoFocus={false}
-              size="medium"
-            />
-          </Suspense>
-
-          <Suspense fallback={null}>
-            <AdvancedFilters />
-          </Suspense>
-
-          {/* Quick Filters */}
-          <div style={{ marginTop: '12px' }}>
-            <Suspense fallback={null}>
-              <QuickFilters
-                variant="horizontal"
-                maxItems={8}
-                showCategories={false}
-              />
-            </Suspense>
-          </div>
-        </div>
-
         <Suspense fallback={<LoadingSkeleton type="page" />}>
-          {renderCurrentPage()}
+          <Routes>
+            <Route index element={<Navigate to="overview" replace />} />
+            <Route path="overview" element={
+              <OverviewPage
+                onExportData={(format: 'csv' | 'json' | 'excel') => {
+                  const allData = [...state.balanceData, ...state.positionsData];
+                  handleExportData(allData, format);
+                }}
+              />
+            } />
+            <Route path="import" element={<ImportPage onDataImported={handleDataImported} />} />
+            <Route path="balance-data" element={<BalanceDataPage onExportData={handleExportData} />} />
+            <Route path="positions-data" element={<PositionsDataPage onExportData={handleExportData} />} />
+            <Route path="analytics" element={<AnalyticsPage />} />
+            <Route path="history" element={<HistoryPage />} />
+            <Route path="fee-calculator" element={<FeeManagementPage activeTab="calculator" />} />
+            <Route path="clients" element={<FeeManagementPage activeTab="clients" />} />
+            <Route path="accounts" element={<FeeManagementPage activeTab="accounts" />} />
+            <Route path="master-accounts" element={<FeeManagementPage activeTab="master-accounts" />} />
+            <Route path="households" element={<FeeManagementPage activeTab="households" />} />
+            <Route path="relationships" element={<FeeManagementPage activeTab="relationships" />} />
+            <Route path="fee-schedules" element={<FeeManagementPage activeTab="schedules" />} />
+            <Route path="billing-fee-agreements" element={<FeeManagementPage activeTab="agreements" />} />
+            <Route path="billing-periods" element={<FeeManagementPage activeTab="billing" />} />
+            <Route path="fee-reports" element={<FeeManagementPage activeTab="reports" />} />
+            <Route path="firm-settings" element={<FirmSettingsPage />} />
+            <Route path="user-management" element={<UserManagementPage />} />
+            <Route path="audit-logs" element={<AuditLogsPage />} />
+            <Route path="app-support" element={<AppSupportPage />} />
+            <Route path="*" element={<Navigate to="overview" replace />} />
+          </Routes>
         </Suspense>
       </div>
 

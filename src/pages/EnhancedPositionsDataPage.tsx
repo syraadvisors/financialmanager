@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Eye, EyeOff, Download, FileSpreadsheet, TrendingUp, Calendar } from 'lucide-react';
+import { Eye, EyeOff, Download, FileSpreadsheet, TrendingUp, Calendar, Search } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { useSearchContext } from '../contexts/SearchContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,7 +8,6 @@ import ErrorBoundary from '../components/ErrorBoundary';
 import { DataProcessingErrorFallback } from '../components/ErrorFallbacks';
 import SearchableVirtualTable, { SearchableTableColumn } from '../components/SearchableVirtualTable';
 import { createVirtualTableHelpers, formatters } from '../components/VirtualScrollTable';
-import UndoRedoControls from '../components/UndoRedoControls';
 
 interface EnhancedPositionsDataPageProps {
   onExportData?: (data: any[], format: 'csv' | 'excel') => void;
@@ -24,11 +23,59 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
   const [showAllColumns, setShowAllColumns] = useState(false);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>('');
-  const [databaseData, setDatabaseData] = useState<any[]>([]);
+  const [summaryStats, setSummaryStats] = useState<any>(null);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState<string>('');
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [isLoadingSearch, setIsLoadingSearch] = useState(false);
   const [isLoadingDates, setIsLoadingDates] = useState(true);
-  const [isLoadingData, setIsLoadingData] = useState(false);
 
   const { positionsData } = appState;
+
+  console.log('[EnhancedPositionsDataPage] Component rendered');
+  console.log('[EnhancedPositionsDataPage] State:', {
+    summaryStats,
+    searchResultsLength: searchResults.length,
+    searchQuery,
+    isLoadingStats,
+    isLoadingSearch,
+    selectedDate,
+    availableDatesLength: availableDates.length,
+  });
+
+  // Load summary statistics on mount (lightweight!)
+  useEffect(() => {
+    const loadSummaryStats = async () => {
+      if (!userProfile?.firmId) {
+        console.log('[EnhancedPositionsDataPage] No firmId, skipping stats load');
+        setIsLoadingStats(false);
+        return;
+      }
+
+      console.log('[EnhancedPositionsDataPage] Loading summary statistics for firm:', userProfile.firmId);
+      setIsLoadingStats(true);
+
+      const response = await importedPositionsDataService.getSummaryStats(userProfile.firmId, selectedDate);
+
+      console.log('[EnhancedPositionsDataPage] Got summary stats:', {
+        hasData: !!response.data,
+        hasError: !!response.error,
+        error: response.error,
+        stats: response.data
+      });
+
+      if (response.data) {
+        setSummaryStats(response.data);
+      } else {
+        console.error('[EnhancedPositionsDataPage] Error loading stats:', response.error);
+        setSummaryStats(null);
+      }
+      setIsLoadingStats(false);
+    };
+
+    loadSummaryStats();
+  }, [userProfile?.firmId, selectedDate]);
 
   // Load available dates on mount
   useEffect(() => {
@@ -38,14 +85,17 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
         return;
       }
 
+      console.log('[EnhancedPositionsDataPage] Loading available dates');
       setIsLoadingDates(true);
       const response = await importedPositionsDataService.getAvailableDates(userProfile.firmId);
 
       if (response.data) {
+        console.log('[EnhancedPositionsDataPage] Available dates:', response.data);
         setAvailableDates(response.data);
-        // Auto-select the most recent date
-        if (response.data.length > 0) {
+        // Auto-select the most recent date (first in array) by default
+        if (!selectedDate && response.data.length > 0) {
           setSelectedDate(response.data[0]);
+          console.log('[EnhancedPositionsDataPage] Auto-selected most recent date:', response.data[0]);
         }
       }
       setIsLoadingDates(false);
@@ -54,27 +104,62 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
     loadAvailableDates();
   }, [userProfile?.firmId]);
 
-  // Load data for selected date
+  // Debounce search query to avoid flickering results
   useEffect(() => {
-    const loadDataForDate = async () => {
-      if (!selectedDate || !userProfile?.firmId) {
-        setDatabaseData([]);
+    const timerId = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300); // 300ms delay
+
+    return () => {
+      clearTimeout(timerId);
+    };
+  }, [searchQuery]);
+
+  // Perform search when debounced query changes
+  useEffect(() => {
+    const performSearch = async () => {
+      if (!userProfile?.firmId) return;
+
+      // If query is empty, clear results
+      if (!debouncedSearchQuery.trim()) {
+        setSearchResults([]);
+        setIsLoadingSearch(false);
         return;
       }
 
-      setIsLoadingData(true);
-      const response = await importedPositionsDataService.getByDate(userProfile.firmId, selectedDate);
+      console.log('[EnhancedPositionsDataPage] Searching for:', debouncedSearchQuery);
+      setIsLoadingSearch(true);
+
+      const response = await importedPositionsDataService.searchPositions(userProfile.firmId, {
+        query: debouncedSearchQuery.trim(),
+        asOfDate: selectedDate,
+        limit: 100
+      });
+
+      console.log('[EnhancedPositionsDataPage] Search results:', {
+        query: debouncedSearchQuery,
+        resultsLength: response.data?.length,
+        hasError: !!response.error
+      });
 
       if (response.data) {
-        setDatabaseData(response.data);
+        setSearchResults(response.data);
       } else {
-        setDatabaseData([]);
+        setSearchResults([]);
       }
-      setIsLoadingData(false);
+      setIsLoadingSearch(false);
     };
 
-    loadDataForDate();
-  }, [selectedDate, userProfile?.firmId]);
+    performSearch();
+  }, [debouncedSearchQuery, userProfile?.firmId, selectedDate]);
+
+  // Handle search input change
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+    if (query.trim()) {
+      setIsLoadingSearch(true); // Show loading immediately on input
+    }
+  }, []);
 
   // Calculate dynamic column widths based on data content
   const calculateColumnWidths = useMemo(() => {
@@ -84,7 +169,8 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
       return Math.max(100, (text?.length || 0) * basePx + 60);
     };
 
-    const sourceData = selectedDate ? databaseData : positionsData;
+    // Use search results for width calculation
+    const sourceData = searchResults;
 
     if (sourceData.length === 0) {
       // Default widths when no data
@@ -123,7 +209,7 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
       marketValue: 140,
       shares: 120,
     };
-  }, [databaseData, positionsData, selectedDate]);
+  }, [searchResults]);
 
   // Define table columns with search capabilities
   const columns: SearchableTableColumn[] = useMemo(() => [
@@ -217,37 +303,27 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
   // Create table helpers
   const { sortData } = createVirtualTableHelpers<any>();
 
-  // Get data based on search/filter state
+  // Get data based on search results
   const displayData = useMemo(() => {
-    // Use database data if a date is selected, otherwise use state data
-    const sourceData = selectedDate ? databaseData : positionsData;
-    let data = sourceData;
+    let data = searchResults;
 
-    // Apply search results if there's a global search
-    if (searchState.globalQuery && searchState.globalResults.positionsData.length >= 0) {
-      data = searchState.globalResults.positionsData;
-    }
-
-    // Apply filters if there are active filters
-    if (searchState.activeFilters.length > 0) {
-      const filteredData = getFilteredData();
-      data = filteredData.positionsData;
-    }
+    console.log('[EnhancedPositionsDataPage] displayData recalculating:', {
+      searchResultsLength: searchResults.length,
+      searchQuery,
+      isLoadingSearch,
+    });
 
     // Sort the data
-    if (sortField) {
+    if (sortField && data.length > 0) {
       data = sortData(data, sortField, sortDirection);
     }
 
+    console.log('[EnhancedPositionsDataPage] Final displayData length:', data.length);
     return data;
   }, [
-    selectedDate,
-    databaseData,
-    positionsData,
-    searchState.globalQuery,
-    searchState.globalResults.positionsData,
-    searchState.activeFilters,
-    getFilteredData,
+    searchResults,
+    searchQuery,
+    isLoadingSearch,
     sortField,
     sortDirection,
     sortData
@@ -272,54 +348,8 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
     }
   }, [displayData, onExportData]);
 
-  // Calculate summary statistics
-  const summaryStats = useMemo(() => {
-    if (displayData.length === 0) return null;
-
-    const totalMarketValue = displayData.reduce((sum, position) =>
-      sum + (parseFloat(position.marketValue?.toString() || '0') || 0), 0
-    );
-
-    // Note: unrealizedGainLoss and costBasis are not in the actual data schema
-    // Using marketValue as a proxy for calculations
-    const totalUnrealizedGainLoss = 0; // Would need to calculate from actual cost basis
-    const totalCostBasis = totalMarketValue; // Placeholder
-
-    // Group by security type
-    const securityTypes = displayData.reduce((acc, position) => {
-      const type = position.securityType || 'Unknown';
-      if (!acc[type]) {
-        acc[type] = { count: 0, marketValue: 0 };
-      }
-      acc[type].count += 1;
-      acc[type].marketValue += parseFloat(position.marketValue?.toString() || '0') || 0;
-      return acc;
-    }, {} as { [key: string]: { count: number; marketValue: number } });
-
-    // Get top security type
-    const topSecurityType = Object.entries(securityTypes).reduce(
-      (max, [type, data]) => {
-        const secData = data as { count: number; marketValue: number };
-        return secData.marketValue > max.marketValue ? { type, ...secData } : max;
-      },
-      { type: 'None', count: 0, marketValue: 0 }
-    );
-
-    const uniqueAccounts = new Set(displayData.map(p => p.accountNumber)).size;
-
-    return {
-      totalPositions: displayData.length,
-      uniqueAccounts,
-      totalMarketValue,
-      totalUnrealizedGainLoss,
-      totalCostBasis,
-      returnPercentage: totalCostBasis > 0 ? (totalUnrealizedGainLoss / totalCostBasis) * 100 : 0,
-      topSecurityType,
-      securityTypes: Object.keys(securityTypes).length,
-    };
-  }, [displayData]);
-
-  if (positionsData.length === 0 && databaseData.length === 0 && !isLoadingData) {
+  // Show empty state only if not loading and no stats available
+  if (!summaryStats && !isLoadingStats) {
     return (
       <div style={{
         padding: '32px',
@@ -328,7 +358,7 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
         minHeight: '100vh',
       }}>
         <TrendingUp size={64} style={{ color: '#ccc', marginBottom: '16px' }} />
-        <h2 style={{ color: '#666', marginBottom: '8px' }}>No Positions Data Available</h2>
+        <h2 style={{ color: '#666', marginBottom: '8px' }}>No Positions Available</h2>
         <p style={{ color: '#999' }}>
           Import positions data to view individual holdings and their performance.
         </p>
@@ -345,53 +375,49 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
       {/* Page Header */}
       <div style={{
         marginBottom: '24px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '16px',
       }}>
-        <div>
+        <div style={{ marginBottom: '16px' }}>
           <h1 style={{
             fontSize: '28px',
             fontWeight: 'bold',
             color: '#333',
-            margin: '0 0 8px 0',
-          }}>
-            Position Holdings
-          </h1>
-          <p style={{
-            color: '#666',
-            fontSize: '14px',
             margin: 0,
           }}>
-            {isFiltering
-              ? `Showing ${displayData.length} of ${positionsData.length} positions`
-              : `${displayData.length} positions loaded`
-            }
-          </p>
+            Positions
+          </h1>
         </div>
 
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <UndoRedoControls variant="horizontal" size="small" showLabels={false} />
-
-          {/* Date Filter */}
+        {/* Action Buttons Row */}
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px' }}>
+          {/* Date Filter - Prominent Display */}
           {availableDates.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Calendar size={16} style={{ color: '#666' }} />
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              backgroundColor: 'white',
+              padding: '10px 16px',
+              borderRadius: '6px',
+              border: '2px solid #2196f3',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+              whiteSpace: 'nowrap',
+            }}>
+              <Calendar size={18} style={{ color: '#2196f3', flexShrink: 0 }} />
+              <span style={{ fontSize: '13px', fontWeight: '600', color: '#666', whiteSpace: 'nowrap' }}>Display Data As Of:</span>
               <select
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                disabled={isLoadingDates || isLoadingData}
+                disabled={isLoadingDates || isLoadingStats}
                 style={{
-                  padding: '8px 12px',
+                  padding: '6px 10px',
                   backgroundColor: 'white',
                   color: '#333',
                   border: '1px solid #ddd',
                   borderRadius: '4px',
                   cursor: 'pointer',
-                  fontSize: '12px',
-                  minWidth: '150px',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  minWidth: '160px',
                 }}
               >
                 {availableDates.map((date) => {
@@ -409,8 +435,8 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
                   );
                 })}
               </select>
-              {isLoadingData && (
-                <span style={{ fontSize: '12px', color: '#666' }}>Loading...</span>
+              {isLoadingStats && (
+                <span style={{ fontSize: '12px', color: '#2196f3', fontWeight: '500', whiteSpace: 'nowrap' }}>Loading...</span>
               )}
             </div>
           )}
@@ -431,7 +457,7 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
             }}
           >
             {showAllColumns ? <EyeOff size={14} /> : <Eye size={14} />}
-            {showAllColumns ? 'Hide Columns' : 'Show All'}
+            {showAllColumns ? 'Hide Optional Columns' : 'Show All Columns'}
           </button>
 
           <button
@@ -514,16 +540,11 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
             borderRadius: '8px',
             border: '1px solid #e0e0e0',
           }}>
-            <div style={{
-              fontSize: '20px',
-              fontWeight: 'bold',
-              color: summaryStats.totalUnrealizedGainLoss >= 0 ? '#4caf50' : '#f44336',
-              marginBottom: '4px'
-            }}>
-              {formatters.currency(summaryStats.totalUnrealizedGainLoss)}
+            <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#9c27b0', marginBottom: '4px' }}>
+              {Object.keys(summaryStats.securityTypeCounts || {}).length} Types
             </div>
             <div style={{ fontSize: '12px', color: '#666' }}>
-              Unrealized G/L ({formatters.percentage(summaryStats.returnPercentage)})
+              Security Types: {Object.entries(summaryStats.securityTypeCounts || {}).map(([type, count]) => `${type} (${count})`).slice(0, 3).join(', ')}
             </div>
           </div>
 
@@ -533,15 +554,111 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
             borderRadius: '8px',
             border: '1px solid #e0e0e0',
           }}>
-            <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#9c27b0', marginBottom: '4px' }}>
-              {summaryStats.topSecurityType.type}
+            <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#ff9800', marginBottom: '4px' }}>
+              {searchResults.length > 0 ? searchResults.length : 'Search'}
             </div>
             <div style={{ fontSize: '12px', color: '#666' }}>
-              Top Security Type ({formatters.currency(summaryStats.topSecurityType.marketValue)})
+              {searchResults.length > 0 ? `Showing ${searchResults.length} search results` : 'Enter search to view positions'}
             </div>
           </div>
         </div>
       )}
+
+      {/* Prominent Search Box Section */}
+      <div style={{
+        backgroundColor: 'white',
+        padding: '24px',
+        borderRadius: '8px',
+        border: '2px solid #e0e0e0',
+        marginBottom: '24px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+      }}>
+        <div style={{ marginBottom: '16px' }}>
+          <h2 style={{
+            fontSize: '18px',
+            fontWeight: '600',
+            color: '#333',
+            margin: '0 0 8px 0',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}>
+            <Search size={20} style={{ color: '#2196f3' }} />
+            Search Positions
+          </h2>
+          <p style={{
+            fontSize: '14px',
+            color: '#666',
+            margin: 0
+          }}>
+            {searchResults.length > 0
+              ? `Showing ${searchResults.length} matching position${searchResults.length === 1 ? '' : 's'}`
+              : 'Enter a search term below to view individual positions. Search by symbol, security description, or account number.'
+            }
+          </p>
+        </div>
+
+        <div style={{ position: 'relative' }}>
+          <Search size={24} style={{
+            position: 'absolute',
+            left: '16px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: '#999'
+          }} />
+          <input
+            type="text"
+            placeholder="Type to search (e.g., AAPL, Apple Inc, or account number)..."
+            value={searchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            autoFocus
+            style={{
+              width: '100%',
+              padding: '16px 16px 16px 52px',
+              border: '2px solid #ddd',
+              borderRadius: '8px',
+              fontSize: '16px',
+              outline: 'none',
+              transition: 'border-color 0.2s',
+              boxSizing: 'border-box',
+            }}
+            onFocus={(e) => e.target.style.borderColor = '#2196f3'}
+            onBlur={(e) => e.target.style.borderColor = '#ddd'}
+          />
+          {isLoadingSearch && (
+            <span style={{
+              position: 'absolute',
+              right: '16px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              fontSize: '14px',
+              color: '#2196f3',
+              fontWeight: '500',
+            }}>
+              Searching...
+            </span>
+          )}
+        </div>
+
+        {!searchQuery && (
+          <div style={{
+            marginTop: '16px',
+            padding: '12px',
+            backgroundColor: '#e3f2fd',
+            borderRadius: '4px',
+            fontSize: '13px',
+            color: '#1565c0',
+            display: 'flex',
+            alignItems: 'start',
+            gap: '8px',
+          }}>
+            <TrendingUp size={16} style={{ marginTop: '2px', flexShrink: 0 }} />
+            <span>
+              <strong>Tip:</strong> For better performance with large datasets, positions are only loaded when you search. Start typing to view results.
+            </span>
+          </div>
+        )}
+      </div>
 
       {/* Data Table */}
       <ErrorBoundary fallback={<DataProcessingErrorFallback />}>
@@ -563,20 +680,6 @@ const EnhancedPositionsDataPage: React.FC<EnhancedPositionsDataPageProps> = ({ o
       </ErrorBoundary>
 
       {/* Performance Info */}
-      {process.env.NODE_ENV === 'development' && (
-        <div style={{
-          marginTop: '16px',
-          padding: '12px',
-          backgroundColor: '#e3f2fd',
-          borderRadius: '4px',
-          fontSize: '12px',
-          color: '#1976d2',
-        }}>
-          <strong>Dev Info:</strong> Showing {displayData.length} rows with virtual scrolling and search highlighting
-          {searchState.globalQuery && ` • Search: "${searchState.globalQuery}"`}
-          {searchState.activeFilters.length > 0 && ` • ${searchState.activeFilters.length} filters active`}
-        </div>
-      )}
     </div>
   );
 };

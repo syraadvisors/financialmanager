@@ -62,19 +62,58 @@ export const smartDetectFileType = (data: any[]): FileType => {
   const firstRow = data[0];
   const columnCount = firstRow.length;
 
-  // Try column count first
+  // First, check if the first row looks like a header row with positions-specific keywords
+  // This is critical for files with ambiguous column counts (like 13 columns)
+  const upperFirstRow = firstRow.map((cell: any) => (cell || '').toString().trim().toUpperCase());
+
+  // Positions file header keywords
+  const positionsHeaderKeywords = ['SYMBOL', 'SECURITY', 'SHARES', 'QUANTITY', 'PRICE', 'DEBT', 'EQUITY', 'CASH', 'LONG', 'SHORT', 'MARKET VALUE', 'POSITION'];
+  const balanceHeaderKeywords = ['PORTFOLIO', 'TOTAL', 'BALANCE', 'BUYING POWER', 'MARGIN', 'NET WORTH'];
+
+  let positionsHeaderScore = 0;
+  let balanceHeaderScore = 0;
+
+  // Check first row for header keywords
+  upperFirstRow.forEach((cell: string) => {
+    positionsHeaderKeywords.forEach(keyword => {
+      if (cell.includes(keyword)) {
+        positionsHeaderScore++;
+      }
+    });
+    balanceHeaderKeywords.forEach(keyword => {
+      if (cell.includes(keyword)) {
+        balanceHeaderScore++;
+      }
+    });
+  });
+
+  console.log(`Header keyword detection - Positions: ${positionsHeaderScore}, Balance: ${balanceHeaderScore}`);
+
+  // If first row has positions header keywords, it's a positions file
+  if (positionsHeaderScore > 0 && positionsHeaderScore > balanceHeaderScore) {
+    console.log('Detected as POSITIONS file based on header keywords');
+    return FileType.POSITIONS;
+  }
+
+  if (balanceHeaderScore > 0 && balanceHeaderScore > positionsHeaderScore) {
+    console.log('Detected as ACCOUNT_BALANCE file based on header keywords');
+    return FileType.ACCOUNT_BALANCE;
+  }
+
+  // Try column count detection
   let detectedType = detectFileTypeByColumnCount(columnCount);
 
-  // If still unknown or ambiguous, analyze content
+  // If still unknown or ambiguous, analyze content in data rows
   if (detectedType === FileType.UNKNOWN ||
       (columnCount >= 5 && columnCount <= 15)) { // Ambiguous range
 
-    // Sample a few rows to analyze content patterns
-    const sampleSize = Math.min(10, data.length);
+    // Sample a few rows (skip first row if it might be a header)
+    const startRow = positionsHeaderScore > 0 || balanceHeaderScore > 0 ? 1 : 0;
+    const sampleSize = Math.min(10, data.length - startRow);
     let positionsIndicators = 0;
     let balanceIndicators = 0;
 
-    for (let i = 0; i < sampleSize; i++) {
+    for (let i = startRow; i < startRow + sampleSize && i < data.length; i++) {
       const row = data[i];
 
       // Look for positions-specific patterns
@@ -96,14 +135,19 @@ export const smartDetectFileType = (data: any[]): FileType => {
       }
     }
 
+    console.log(`Content pattern detection - Positions: ${positionsIndicators}, Balance: ${balanceIndicators}`);
+
     // Make decision based on content analysis
     if (positionsIndicators > balanceIndicators) {
+      console.log('Detected as POSITIONS file based on content patterns');
       return FileType.POSITIONS;
     } else if (balanceIndicators > positionsIndicators) {
+      console.log('Detected as ACCOUNT_BALANCE file based on content patterns');
       return FileType.ACCOUNT_BALANCE;
     }
   }
 
+  console.log(`Defaulting to column count detection: ${detectedType}`);
   return detectedType;
 };
 

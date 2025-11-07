@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Upload,
   BarChart3,
@@ -20,11 +21,11 @@ import {
   ChevronRight,
   LogOut,
   Menu,
-  X
+  X,
+  Book
 } from 'lucide-react';
 import { PageType, NavigationItem, AppState } from '../types/NavigationTypes';
 import { APP_CONFIG } from '../config/constants';
-import UndoRedoControls from './UndoRedoControls';
 import { useAuth } from '../contexts/AuthContext';
 import UserProfileModal from './UserProfileModal';
 import { importedBalanceDataService } from '../services/api/importedBalanceData.service';
@@ -48,7 +49,36 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
   const [balanceDataCount, setBalanceDataCount] = useState(0);
   const [positionsDataCount, setPositionsDataCount] = useState(0);
   const { user, userProfile, signOut, refreshProfile } = useAuth();
+  const navigate = useNavigate();
   const isCollapsed = externalCollapsed !== undefined ? externalCollapsed : internalCollapsed;
+
+  // Map PageType to URL path
+  const pageTypeToPath = (pageType: PageType): string => {
+    const pathMap: Record<PageType, string> = {
+      [PageType.OVERVIEW]: '/app/overview',
+      [PageType.IMPORT]: '/app/import',
+      [PageType.BALANCE_DATA]: '/app/balance-data',
+      [PageType.POSITIONS_DATA]: '/app/positions-data',
+      [PageType.ANALYTICS]: '/app/analytics',
+      [PageType.HISTORY]: '/app/history',
+      [PageType.FEE_CALCULATOR]: '/app/fee-calculator',
+      [PageType.CLIENTS]: '/app/clients',
+      [PageType.ACCOUNTS]: '/app/accounts',
+      [PageType.MASTER_ACCOUNTS]: '/app/master-accounts',
+      [PageType.HOUSEHOLDS]: '/app/households',
+      [PageType.RELATIONSHIPS]: '/app/relationships',
+      [PageType.FEE_SCHEDULES]: '/app/fee-schedules',
+      [PageType.BILLING_FEE_AGREEMENTS]: '/app/billing-fee-agreements',
+      [PageType.BILLING_PERIODS]: '/app/billing-periods',
+      [PageType.FEE_REPORTS]: '/app/fee-reports',
+      [PageType.FIRM_SETTINGS]: '/app/firm-settings',
+      [PageType.USER_MANAGEMENT]: '/app/user-management',
+      [PageType.AUDIT_LOGS]: '/app/audit-logs',
+      [PageType.APP_SUPPORT]: '/app/app-support',
+      [PageType.SETTINGS]: '/app/firm-settings', // Fallback
+    };
+    return pathMap[pageType] || '/app/overview';
+  };
 
   // Fetch database record counts
   useEffect(() => {
@@ -123,7 +153,13 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
   };
 
   const handleNavItemClick = (pageId: PageType) => {
+    // Navigate to the URL
+    const path = pageTypeToPath(pageId);
+    navigate(path);
+
+    // Also call onPageChange for backward compatibility (will be synced by App.tsx)
     onPageChange(pageId);
+
     if (isMobile) {
       setIsMobileMenuOpen(false);
     }
@@ -144,6 +180,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
       filetext: <FileText size={size} />,
       calendar: <Calendar size={size} />,
       settings: <Settings size={size} />,
+      book: <Book size={size} />,
     };
     return iconMap[iconName] || <Database size={size} />;
   };
@@ -254,21 +291,21 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
     },
     {
       id: PageType.BALANCE_DATA,
-      title: 'Balance Data',
+      title: 'Account Balances',
       description: 'Account balances',
       icon: 'balance',
       requiresData: 'balance',
     },
     {
       id: PageType.POSITIONS_DATA,
-      title: 'Positions Data',
+      title: 'Positions',
       description: 'Account positions',
       icon: 'positions',
       requiresData: 'positions',
     },
     {
       id: PageType.HISTORY,
-      title: 'Import History',
+      title: 'Activity',
       description: 'Previous imports',
       icon: 'history',
       requiresData: 'none',
@@ -292,6 +329,13 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
       title: 'Audit Logs',
       description: 'Activity logs',
       icon: 'filetext',
+      requiresData: 'none',
+    },
+    {
+      id: PageType.APP_SUPPORT,
+      title: 'App Support',
+      description: 'Help & documentation',
+      icon: 'book',
       requiresData: 'none',
     },
   ];
@@ -559,57 +603,6 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
       </div>
 
       {/* Status Indicators */}
-      {!isCollapsed && (
-        <div style={{
-          padding: '12px 20px 8px 20px',
-          borderTop: '1px solid var(--border-primary)',
-          flexShrink: 0,
-        }}>
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-            <strong>Data Status</strong>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '11px',
-              color: balanceDataCount > 0 ? '#4caf50' : '#999',
-            }}>
-              {balanceDataCount > 0 ? (
-                <CheckCircle size={14} />
-              ) : (
-                <AlertCircle size={14} />
-              )}
-              Balance Data ({balanceDataCount} records)
-            </div>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '11px',
-              color: positionsDataCount > 0 ? '#4caf50' : '#999',
-            }}>
-              {positionsDataCount > 0 ? (
-                <CheckCircle size={14} />
-              ) : (
-                <AlertCircle size={14} />
-              )}
-              Positions Data ({positionsDataCount} records)
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Undo/Redo Controls */}
-      {!isCollapsed && (
-        <div style={{
-          padding: '8px 20px',
-          flexShrink: 0
-        }}>
-          <UndoRedoControls />
-        </div>
-      )}
 
       {/* User Profile Section */}
       {user && (
@@ -650,7 +643,17 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
               fontWeight: 'bold',
               flexShrink: 0
             }}>
-              {user.email?.charAt(0).toUpperCase() || 'U'}
+              {(() => {
+                const fullName = user.user_metadata?.full_name;
+                if (fullName) {
+                  const nameParts = fullName.trim().split(' ');
+                  if (nameParts.length >= 2) {
+                    return (nameParts[0].charAt(0) + nameParts[nameParts.length - 1].charAt(0)).toUpperCase();
+                  }
+                  return fullName.charAt(0).toUpperCase();
+                }
+                return user.email?.charAt(0).toUpperCase() || 'U';
+              })()}
             </div>
             {!isCollapsed && (
               <div style={{ flex: 1, textAlign: 'left', overflow: 'hidden' }}>
@@ -750,19 +753,6 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange, appS
               </div>
             </>
           )}
-        </div>
-      )}
-
-      {/* Footer */}
-      {!isCollapsed && (
-        <div style={{
-          padding: '10px 20px',
-          borderTop: '1px solid var(--border-primary)',
-          fontSize: '10px',
-          color: 'var(--text-tertiary)',
-          textAlign: 'center',
-        }}>
-          {APP_CONFIG.APP_VERSION}
         </div>
       )}
 

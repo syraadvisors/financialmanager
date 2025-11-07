@@ -187,7 +187,7 @@ const HistoryPage: React.FC<HistoryPageProps> = () => {
             color: '#333',
             margin: '0 0 8px 0',
           }}>
-            Import/Export History
+            Activity
           </h1>
           <p style={{
             color: '#666',

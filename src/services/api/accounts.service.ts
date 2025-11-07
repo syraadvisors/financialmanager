@@ -316,4 +316,24 @@ export const accountsService = {
   async unlinkFromClient(accountId: string): Promise<ApiResponse<Account>> {
     return this.update(accountId, { clientId: undefined });
   },
+
+  // Get total count of accounts for a firm
+  async getCount(firmId: string): Promise<ApiResponse<number>> {
+    try {
+      const { count, error } = await supabase
+        .from('accounts')
+        .select('*', { count: 'exact', head: true })
+        .eq('firm_id', firmId);
+
+      if (error) {
+        console.error('Error counting accounts:', error);
+        return { error: error.message };
+      }
+
+      return { data: count || 0 };
+    } catch (err) {
+      console.error('Unexpected error counting accounts:', err);
+      return { error: 'Failed to count accounts' };
+    }
+  },
 };

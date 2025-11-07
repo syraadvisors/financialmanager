@@ -2,6 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { X, Home, Search, AlertCircle, CheckSquare, Square, DollarSign, Building2 } from 'lucide-react';
 import { Household, HouseholdFormData, HouseholdStatus, BillingAggregationLevel } from '../types/Household';
 import { Account } from '../types/Account';
+import { Client } from '../types/Client';
+import { Relationship } from '../types/Relationship';
+import { FeeSchedule } from '../types/FeeSchedule';
 
 interface HouseholdFormModalProps {
   isOpen: boolean;
@@ -10,6 +13,9 @@ interface HouseholdFormModalProps {
   household: Household | null;
   existingHouseholds: Household[]; // All households to check for account conflicts
   availableAccounts: Account[]; // Real accounts from database
+  availableClients: Client[]; // Real clients from database
+  availableRelationships: Relationship[]; // Real relationships from database
+  availableFeeSchedules: FeeSchedule[]; // Real fee schedules from database
 }
 
 const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
@@ -18,198 +24,34 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
   onSave,
   household,
   existingHouseholds,
-  availableAccounts
+  availableAccounts,
+  availableClients,
+  availableRelationships,
+  availableFeeSchedules
 }) => {
-  // Use real accounts passed as prop instead of mock data
-  const mockAccounts: Account[] = availableAccounts || [
-    {
-      id: '1',
-      firmId: 'mock-firm-id',
-      createdAt: new Date('2023-01-15'),
-      updatedAt: new Date('2024-10-04'),
-      accountNumber: 'ACC-12345',
-      accountName: 'John Smith Individual',
-      accountType: 'Individual' as any,
-      accountStatus: 'Active' as any,
-      clientId: '1',
-      clientName: 'John Smith',
-      householdId: 'HH-001',
-      householdName: 'Smith Family',
-      currentBalance: 1250000,
-      reconciliationStatus: 'Matched' as any,
-      isExcludedFromBilling: false
-    },
-    {
-      id: '2',
-      firmId: 'mock-firm-id',
-      createdAt: new Date('2023-01-15'),
-      updatedAt: new Date('2024-10-04'),
-      accountNumber: 'ACC-12346',
-      accountName: 'John Smith IRA',
-      accountType: 'IRA Traditional' as any,
-      accountStatus: 'Active' as any,
-      clientId: '1',
-      clientName: 'John Smith',
-      householdId: 'HH-001',
-      householdName: 'Smith Family',
-      currentBalance: 750000,
-      reconciliationStatus: 'Matched' as any,
-      isExcludedFromBilling: false
-    },
-    {
-      id: '3',
-      firmId: 'mock-firm-id',
-      createdAt: new Date('2023-06-10'),
-      updatedAt: new Date('2024-10-04'),
-      accountNumber: 'ACC-11111',
-      accountName: 'Smith Family Trust',
-      accountType: 'Trust' as any,
-      accountStatus: 'Active' as any,
-      clientId: '2',
-      clientName: 'Smith Family Trust',
-      householdId: 'HH-001',
-      householdName: 'Smith Family',
-      currentBalance: 5800000,
-      reconciliationStatus: 'Matched' as any,
-      isExcludedFromBilling: false
-    },
-    {
-      id: '4',
-      firmId: 'mock-firm-id',
-      createdAt: new Date('2024-02-01'),
-      updatedAt: new Date('2024-10-04'),
-      accountNumber: 'ACC-22222',
-      accountName: 'Tech Startup LLC Operating',
-      accountType: 'LLC' as any,
-      accountStatus: 'Active' as any,
-      clientId: '3',
-      clientName: 'Tech Startup LLC',
-      householdId: 'HH-002',
-      householdName: 'Tech Startup LLC',
-      currentBalance: 1200000,
-      reconciliationStatus: 'Matched' as any,
-      isExcludedFromBilling: false
-    },
-    {
-      id: '5',
-      firmId: 'mock-firm-id',
-      createdAt: new Date('2024-02-01'),
-      updatedAt: new Date('2024-10-04'),
-      accountNumber: 'ACC-22223',
-      accountName: 'Tech Startup LLC Investment',
-      accountType: 'Corporate' as any,
-      accountStatus: 'Active' as any,
-      clientId: '3',
-      clientName: 'Tech Startup LLC',
-      householdId: 'HH-002',
-      householdName: 'Tech Startup LLC',
-      currentBalance: 450000,
-      reconciliationStatus: 'Matched' as any,
-      isExcludedFromBilling: false
-    },
-    {
-      id: '6',
-      firmId: 'mock-firm-id',
-      createdAt: new Date('2021-06-15'),
-      updatedAt: new Date('2024-10-04'),
-      accountNumber: 'ACC-33333',
-      accountName: 'Robert Johnson Individual',
-      accountType: 'Individual' as any,
-      accountStatus: 'Active' as any,
-      clientId: '4',
-      clientName: 'Robert Johnson',
-      householdId: 'HH-003',
-      householdName: 'Johnson Family',
-      currentBalance: 2100000,
-      reconciliationStatus: 'Matched' as any,
-      isExcludedFromBilling: false
-    },
-    {
-      id: '7',
-      firmId: 'mock-firm-id',
-      createdAt: new Date('2021-06-15'),
-      updatedAt: new Date('2024-10-04'),
-      accountNumber: 'ACC-33334',
-      accountName: 'Mary Johnson IRA',
-      accountType: 'IRA Roth' as any,
-      accountStatus: 'Active' as any,
-      clientId: '5',
-      clientName: 'Mary Johnson',
-      householdId: 'HH-003',
-      householdName: 'Johnson Family',
-      currentBalance: 1400000,
-      reconciliationStatus: 'Matched' as any,
-      isExcludedFromBilling: false
-    },
-    {
-      id: '8',
-      firmId: 'mock-firm-id',
-      createdAt: new Date('2024-09-01'),
-      updatedAt: new Date('2024-10-04'),
-      accountNumber: 'ACC-44444',
-      accountName: 'Jane Doe Individual',
-      accountType: 'Individual' as any,
-      accountStatus: 'Active' as any,
-      clientId: '7',
-      clientName: 'Jane Doe',
-      householdId: undefined,
-      currentBalance: 890000,
-      reconciliationStatus: 'Matched' as any,
-      isExcludedFromBilling: false
-    },
-    {
-      id: '9',
-      firmId: 'mock-firm-id',
-      createdAt: new Date('2024-09-01'),
-      updatedAt: new Date('2024-10-04'),
-      accountNumber: 'ACC-44445',
-      accountName: 'Jane Doe Roth IRA',
-      accountType: 'IRA Roth' as any,
-      accountStatus: 'Active' as any,
-      clientId: '7',
-      clientName: 'Jane Doe',
-      householdId: undefined,
-      currentBalance: 325000,
-      reconciliationStatus: 'Matched' as any,
-      isExcludedFromBilling: false
-    }
-  ];
+  // Transform clients for dropdown (map fullLegalName to name for consistency)
+  const transformedClients = useMemo(() => {
+    return availableClients.map(c => ({
+      id: c.id,
+      name: c.fullLegalName
+    }));
+  }, [availableClients]);
 
-  // Mock clients for primary contact selection
-  const mockClients = [
-    { id: '1', name: 'John Smith' },
-    { id: '2', name: 'Smith Family Trust' },
-    { id: '3', name: 'Tech Startup LLC' },
-    { id: '4', name: 'Robert Johnson' },
-    { id: '5', name: 'Mary Johnson' }
-  ];
+  // Transform fee schedules for dropdown
+  const transformedFeeSchedules = useMemo(() => {
+    return availableFeeSchedules.map(fs => ({
+      id: fs.id,
+      name: fs.name
+    }));
+  }, [availableFeeSchedules]);
 
-  // Mock relationships for selection
-  // Filter out relationships that already have this household (unless we're editing and it's our relationship)
-  const mockRelationships = [
-    { id: 'REL-001', name: 'Johnson Extended Family', householdIds: ['HH-003'] },
-    { id: 'REL-002', name: 'Smith Multi-Gen Trust', householdIds: [] }
-  ];
-
-  // Filter relationships - only show available ones
-  const availableRelationships = useMemo(() => {
-    return mockRelationships.filter(rel => {
-      // If editing and this is the current relationship, include it
-      if (household?.relationshipId === rel.id) {
-        return true;
-      }
-      // Otherwise check if relationship has room (in future, you might limit number of households per relationship)
-      // For now, just return all
-      return true;
-    });
-  }, [household]);
-
-  // Mock fee schedules
-  const mockFeeSchedules = [
-    { id: 'FS-001', name: 'Standard Tiered' },
-    { id: 'FS-002', name: 'Premium Flat' },
-    { id: 'FS-003', name: 'Corporate Standard' }
-  ];
+  // Transform relationships for dropdown
+  const transformedRelationships = useMemo(() => {
+    return availableRelationships.map(r => ({
+      id: r.id,
+      name: r.relationshipName
+    }));
+  }, [availableRelationships]);
 
   const [accountSearchTerm, setAccountSearchTerm] = useState('');
   const [formData, setFormData] = useState<HouseholdFormData>({
@@ -289,7 +131,7 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
   // Filter accounts to only show available ones (not in other households)
   // When editing, include accounts from the current household
   const filteredAvailableAccounts = useMemo(() => {
-    return mockAccounts.filter(account => {
+    return availableAccounts.filter(account => {
       // If editing this household, include its own accounts
       if (household && account.householdId === household.id) {
         return true;
@@ -297,14 +139,14 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
       // Otherwise, only include accounts without a household
       return !account.householdId;
     });
-  }, [household, mockAccounts]);
+  }, [household, availableAccounts]);
 
   // Get unique clients from selected accounts
   const associatedClients = useMemo(() => {
     const selectedAccounts = filteredAvailableAccounts.filter(acc => formData.memberAccountIds.includes(acc.id));
     const clientIds = new Set(selectedAccounts.map(acc => acc.clientId).filter(Boolean));
-    return mockClients.filter(client => clientIds.has(client.id));
-  }, [formData.memberAccountIds, filteredAvailableAccounts, mockClients]);
+    return transformedClients.filter(client => clientIds.has(client.id));
+  }, [formData.memberAccountIds, filteredAvailableAccounts, transformedClients]);
 
   // Filter accounts based on search (only from available accounts)
   const filteredAccounts = useMemo(() => {
@@ -579,7 +421,7 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
               </p>
 
               {/* Availability Info */}
-              {mockAccounts.length > filteredAvailableAccounts.length && (
+              {availableAccounts.length > filteredAvailableAccounts.length && (
                 <div style={{
                   padding: '10px 12px',
                   backgroundColor: '#fff3e0',
@@ -589,7 +431,7 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
                   fontSize: '13px',
                   color: '#e65100'
                 }}>
-                  <strong>Note:</strong> {mockAccounts.length - filteredAvailableAccounts.length} account{mockAccounts.length - filteredAvailableAccounts.length !== 1 ? 's are' : ' is'} already assigned to other households and cannot be selected.
+                  <strong>Note:</strong> {availableAccounts.length - filteredAvailableAccounts.length} account{availableAccounts.length - filteredAvailableAccounts.length !== 1 ? 's are' : ' is'} already assigned to other households and cannot be selected.
                 </div>
               )}
 
@@ -822,7 +664,7 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
                     }}
                   >
                     <option value="">Default (from client)</option>
-                    {mockFeeSchedules.map(schedule => (
+                    {transformedFeeSchedules.map(schedule => (
                       <option key={schedule.id} value={schedule.id}>
                         {schedule.name}
                       </option>
@@ -881,7 +723,7 @@ const HouseholdFormModal: React.FC<HouseholdFormModalProps> = ({
                 }}
               >
                 <option value="">None</option>
-                {availableRelationships.map(rel => (
+                {transformedRelationships.map(rel => (
                   <option key={rel.id} value={rel.id}>
                     {rel.name}
                   </option>

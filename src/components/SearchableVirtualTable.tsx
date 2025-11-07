@@ -23,7 +23,7 @@ export interface SearchableTableColumn<T = any> {
 export interface SearchableTableProps<T = any> {
   data: T[];
   columns: SearchableTableColumn<T>[];
-  height: number;
+  height: number | string;
   rowHeight?: number;
   showAllColumns?: boolean;
   sortField?: string;
@@ -412,6 +412,7 @@ const SearchableVirtualTable = <T extends any>({
         alignItems: 'center',
         gap: '6px',
         position: 'relative',
+        flexShrink: 0,
       }}>
         <Search size={14} />
         {searchState.globalQuery && (
@@ -779,6 +780,9 @@ const SearchableVirtualTable = <T extends any>({
         borderRadius: '8px',
         overflow: 'hidden',
         backgroundColor: 'white',
+        height: typeof height === 'string' ? height : `${height}px`,
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
       {/* Search Results Summary */}
@@ -794,6 +798,7 @@ const SearchableVirtualTable = <T extends any>({
           top: 0,
           zIndex: 10,
           minWidth: totalWidth + 20, // Add buffer to match row width
+          flexShrink: 0,
         }}
       >
         {autoSizedColumns.map((column) => {
@@ -879,8 +884,9 @@ const SearchableVirtualTable = <T extends any>({
         <div
           ref={listRef}
           style={{
-            height: height - 50 - (searchResultsSummary ? 32 : 0),
+            flex: 1,
             overflow: 'auto',
+            minHeight: 0,
           }}
         >
           {data.map((item, index) => (
@@ -912,6 +918,7 @@ const SearchableVirtualTable = <T extends any>({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          flexShrink: 0,
         }}
       >
         <span>

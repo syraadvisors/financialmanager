@@ -17,7 +17,13 @@ import DeleteConfirmationModal from './DeleteConfirmationModal';
 import { useFirm } from '../contexts/FirmContext';
 import { householdsService } from '../services/api/households.service';
 import { accountsService } from '../services/api/accounts.service';
+import { clientsService } from '../services/api/clients.service';
+import { relationshipsService } from '../services/api/relationships.service';
+import { feeSchedulesService } from '../services/api/feeSchedules.service';
 import { Account } from '../types/Account';
+import { Client } from '../types/Client';
+import { Relationship } from '../types/Relationship';
+import { FeeSchedule } from '../types/FeeSchedule';
 
 const HouseholdsPage: React.FC = () => {
   const { firmId } = useFirm();
@@ -29,6 +35,9 @@ const HouseholdsPage: React.FC = () => {
   const [deletingHousehold, setDeletingHousehold] = useState<Household | null>(null);
   const [households, setHouseholds] = useState<Household[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [relationships, setRelationships] = useState<Relationship[]>([]);
+  const [feeSchedules, setFeeSchedules] = useState<FeeSchedule[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Fetch households and accounts from Supabase
@@ -38,10 +47,13 @@ const HouseholdsPage: React.FC = () => {
 
       setLoading(true);
 
-      // Fetch households and accounts in parallel
-      const [householdsResponse, accountsResponse] = await Promise.all([
+      // Fetch all data in parallel
+      const [householdsResponse, accountsResponse, clientsResponse, relationshipsResponse, feeSchedulesResponse] = await Promise.all([
         householdsService.getAll(firmId),
-        accountsService.getAll(firmId)
+        accountsService.getAll(firmId),
+        clientsService.getAll(),
+        relationshipsService.getAll(firmId),
+        feeSchedulesService.getAll(firmId)
       ]);
 
       if (householdsResponse.data) {
@@ -54,6 +66,24 @@ const HouseholdsPage: React.FC = () => {
         setAccounts(accountsResponse.data);
       } else if (accountsResponse.error) {
         console.error('Failed to fetch accounts:', accountsResponse.error);
+      }
+
+      if (clientsResponse.data) {
+        setClients(clientsResponse.data);
+      } else if (clientsResponse.error) {
+        console.error('Failed to fetch clients:', clientsResponse.error);
+      }
+
+      if (relationshipsResponse.data) {
+        setRelationships(relationshipsResponse.data);
+      } else if (relationshipsResponse.error) {
+        console.error('Failed to fetch relationships:', relationshipsResponse.error);
+      }
+
+      if (feeSchedulesResponse.data) {
+        setFeeSchedules(feeSchedulesResponse.data);
+      } else if (feeSchedulesResponse.error) {
+        console.error('Failed to fetch fee schedules:', feeSchedulesResponse.error);
       }
 
       setLoading(false);
@@ -512,6 +542,9 @@ const HouseholdsPage: React.FC = () => {
         household={editingHousehold}
         existingHouseholds={households}
         availableAccounts={accounts}
+        availableClients={clients}
+        availableRelationships={relationships}
+        availableFeeSchedules={feeSchedules}
       />
 
       {/* Delete Confirmation Modal */}

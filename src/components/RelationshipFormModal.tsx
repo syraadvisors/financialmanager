@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { X, Building2, Search, AlertCircle, CheckSquare, Square, DollarSign, Home } from 'lucide-react';
 import { Relationship, RelationshipFormData, RelationshipStatus } from '../types/Relationship';
 import { Household, HouseholdStatus } from '../types/Household';
+import { Client } from '../types/Client';
+import { FeeSchedule } from '../types/FeeSchedule';
 
 interface RelationshipFormModalProps {
   isOpen: boolean;
@@ -9,6 +11,9 @@ interface RelationshipFormModalProps {
   onSave: (relationship: RelationshipFormData) => void;
   relationship: Relationship | null;
   existingRelationships: Relationship[]; // All relationships to check for household conflicts
+  availableHouseholds: Household[]; // Real households from database
+  availableClients: Client[]; // Real clients from database
+  availableFeeSchedules: FeeSchedule[]; // Real fee schedules from database
 }
 
 const RelationshipFormModal: React.FC<RelationshipFormModalProps> = ({
@@ -16,81 +21,26 @@ const RelationshipFormModal: React.FC<RelationshipFormModalProps> = ({
   onClose,
   onSave,
   relationship,
-  existingRelationships
+  existingRelationships,
+  availableHouseholds,
+  availableClients,
+  availableFeeSchedules
 }) => {
-  // Mock households for selection - in production, this would come from API/state
-  const mockHouseholds: Household[] = [
-    {
-      id: 'HH-001',
-      firmId: 'mock-firm-id',
-      createdAt: new Date('2020-03-15'),
-      updatedAt: new Date('2024-10-04'),
-      householdName: 'Smith Family',
-      householdStatus: HouseholdStatus.ACTIVE,
-      memberAccountIds: ['1', '2', '3'],
-      billingAggregationLevel: 'Household' as any,
-      relationshipId: undefined,
-      numberOfAccounts: 3,
-      totalAUM: 7800000
-    },
-    {
-      id: 'HH-002',
-      firmId: 'mock-firm-id',
-      createdAt: new Date('2024-02-01'),
-      updatedAt: new Date('2024-10-04'),
-      householdName: 'Tech Startup LLC',
-      householdStatus: HouseholdStatus.ACTIVE,
-      memberAccountIds: ['4', '5'],
-      billingAggregationLevel: 'Account' as any,
-      relationshipId: undefined,
-      numberOfAccounts: 2,
-      totalAUM: 1650000
-    },
-    {
-      id: 'HH-003',
-      firmId: 'mock-firm-id',
-      createdAt: new Date('2021-06-15'),
-      updatedAt: new Date('2024-09-20'),
-      householdName: 'Johnson Family',
-      householdStatus: HouseholdStatus.ACTIVE,
-      memberAccountIds: ['6', '7'],
-      billingAggregationLevel: 'Household' as any,
-      relationshipId: 'REL-001',
-      relationshipName: 'Johnson Extended Family',
-      numberOfAccounts: 2,
-      totalAUM: 3500000
-    },
-    {
-      id: 'HH-004',
-      firmId: 'mock-firm-id',
-      createdAt: new Date('2019-11-20'),
-      updatedAt: new Date('2024-05-15'),
-      householdName: 'Williams Retirement',
-      householdStatus: HouseholdStatus.INACTIVE,
-      memberAccountIds: [],
-      billingAggregationLevel: 'Account' as any,
-      relationshipId: undefined,
-      numberOfAccounts: 0,
-      totalAUM: 0
-    }
-  ];
+  // Transform clients for dropdown
+  const transformedClients = useMemo(() => {
+    return availableClients.map(c => ({
+      id: c.id,
+      name: c.fullLegalName
+    }));
+  }, [availableClients]);
 
-  // Mock clients for primary contact selection
-  const mockClients = [
-    { id: '1', name: 'John Smith' },
-    { id: '2', name: 'Smith Family Trust' },
-    { id: '3', name: 'Tech Startup LLC' },
-    { id: '4', name: 'Robert Johnson' },
-    { id: '5', name: 'Mary Johnson' },
-    { id: '6', name: 'David Williams' }
-  ];
-
-  // Mock fee schedules
-  const mockFeeSchedules = [
-    { id: 'FS-001', name: 'Standard Tiered' },
-    { id: 'FS-002', name: 'Premium Flat' },
-    { id: 'FS-003', name: 'Corporate Standard' }
-  ];
+  // Transform fee schedules for dropdown
+  const transformedFeeSchedules = useMemo(() => {
+    return availableFeeSchedules.map(fs => ({
+      id: fs.id,
+      name: fs.name
+    }));
+  }, [availableFeeSchedules]);
 
   const [householdSearchTerm, setHouseholdSearchTerm] = useState('');
   const [formData, setFormData] = useState<RelationshipFormData>({
@@ -163,8 +113,8 @@ const RelationshipFormModal: React.FC<RelationshipFormModalProps> = ({
 
   // Filter households to only show available ones (not in other relationships)
   // When editing, include households from the current relationship
-  const availableHouseholds = useMemo(() => {
-    return mockHouseholds.filter(household => {
+  const filteredAvailableHouseholds = useMemo(() => {
+    return availableHouseholds.filter(household => {
       // If editing this relationship, include its own households
       if (relationship && household.relationshipId === relationship.id) {
         return true;
@@ -172,11 +122,11 @@ const RelationshipFormModal: React.FC<RelationshipFormModalProps> = ({
       // Otherwise, only include households without a relationship
       return !household.relationshipId;
     });
-  }, [relationship]);
+  }, [relationship, availableHouseholds]);
 
   // Filter households based on search
   const filteredHouseholds = useMemo(() => {
-    let households = availableHouseholds;
+    let households = filteredAvailableHouseholds;
 
     if (householdSearchTerm.trim()) {
       const searchLower = householdSearchTerm.toLowerCase();
@@ -186,7 +136,7 @@ const RelationshipFormModal: React.FC<RelationshipFormModalProps> = ({
     }
 
     return households;
-  }, [householdSearchTerm, availableHouseholds]);
+  }, [householdSearchTerm, filteredAvailableHouseholds]);
 
   const validate = (): boolean => {
     const newErrors: { [key: string]: string } = {};
@@ -228,10 +178,10 @@ const RelationshipFormModal: React.FC<RelationshipFormModalProps> = ({
 
   // Calculate total AUM from selected households
   const totalAUM = useMemo(() => {
-    return availableHouseholds
+    return filteredAvailableHouseholds
       .filter(h => formData.memberHouseholdIds.includes(h.id))
       .reduce((sum, h) => sum + (h.totalAUM || 0), 0);
-  }, [formData.memberHouseholdIds, availableHouseholds]);
+  }, [formData.memberHouseholdIds, filteredAvailableHouseholds]);
 
   if (!isOpen) return null;
 
@@ -437,7 +387,7 @@ const RelationshipFormModal: React.FC<RelationshipFormModalProps> = ({
               </p>
 
               {/* Availability Info */}
-              {mockHouseholds.length > availableHouseholds.length && (
+              {availableHouseholds.length > filteredAvailableHouseholds.length && (
                 <div style={{
                   padding: '10px 12px',
                   backgroundColor: '#fff3e0',
@@ -447,7 +397,7 @@ const RelationshipFormModal: React.FC<RelationshipFormModalProps> = ({
                   fontSize: '13px',
                   color: '#e65100'
                 }}>
-                  <strong>Note:</strong> {mockHouseholds.length - availableHouseholds.length} household{mockHouseholds.length - availableHouseholds.length !== 1 ? 's are' : ' is'} already assigned to other relationships and cannot be selected.
+                  <strong>Note:</strong> {availableHouseholds.length - filteredAvailableHouseholds.length} household{availableHouseholds.length - filteredAvailableHouseholds.length !== 1 ? 's are' : ' is'} already assigned to other relationships and cannot be selected.
                 </div>
               )}
 
@@ -592,7 +542,7 @@ const RelationshipFormModal: React.FC<RelationshipFormModalProps> = ({
                 }}
               >
                 <option value="">Select primary contact...</option>
-                {mockClients.map(client => (
+                {transformedClients.map(client => (
                   <option key={client.id} value={client.id}>
                     {client.name}
                   </option>
@@ -629,7 +579,7 @@ const RelationshipFormModal: React.FC<RelationshipFormModalProps> = ({
                     }}
                   >
                     <option value="">Default (from household)</option>
-                    {mockFeeSchedules.map(schedule => (
+                    {transformedFeeSchedules.map(schedule => (
                       <option key={schedule.id} value={schedule.id}>
                         {schedule.name}
                       </option>

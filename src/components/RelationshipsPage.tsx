@@ -12,10 +12,16 @@ import {
   TrendingUp
 } from 'lucide-react';
 import { Relationship, RelationshipStatus, RelationshipFormData } from '../types/Relationship';
+import { Household } from '../types/Household';
+import { Client } from '../types/Client';
+import { FeeSchedule } from '../types/FeeSchedule';
 import RelationshipFormModal from './RelationshipFormModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import { useFirm } from '../contexts/FirmContext';
 import { relationshipsService } from '../services/api/relationships.service';
+import { householdsService } from '../services/api/households.service';
+import { clientsService } from '../services/api/clients.service';
+import { feeSchedulesService } from '../services/api/feeSchedules.service';
 
 const RelationshipsPage: React.FC = () => {
   const { firmId } = useFirm();
@@ -26,26 +32,54 @@ const RelationshipsPage: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingRelationship, setDeletingRelationship] = useState<Relationship | null>(null);
   const [relationships, setRelationships] = useState<Relationship[]>([]);
+  const [households, setHouseholds] = useState<Household[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [feeSchedules, setFeeSchedules] = useState<FeeSchedule[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch relationships from Supabase
+  // Fetch all data from Supabase
   useEffect(() => {
-    const fetchRelationships = async () => {
+    const fetchData = async () => {
       if (!firmId) return;
 
       setLoading(true);
-      const response = await relationshipsService.getAll(firmId);
 
-      if (response.data) {
-        setRelationships(response.data);
-      } else if (response.error) {
-        console.error('Failed to fetch relationships:', response.error);
+      // Fetch all data in parallel
+      const [relationshipsResponse, householdsResponse, clientsResponse, feeSchedulesResponse] = await Promise.all([
+        relationshipsService.getAll(firmId),
+        householdsService.getAll(firmId),
+        clientsService.getAll(),
+        feeSchedulesService.getAll(firmId)
+      ]);
+
+      if (relationshipsResponse.data) {
+        setRelationships(relationshipsResponse.data);
+      } else if (relationshipsResponse.error) {
+        console.error('Failed to fetch relationships:', relationshipsResponse.error);
+      }
+
+      if (householdsResponse.data) {
+        setHouseholds(householdsResponse.data);
+      } else if (householdsResponse.error) {
+        console.error('Failed to fetch households:', householdsResponse.error);
+      }
+
+      if (clientsResponse.data) {
+        setClients(clientsResponse.data);
+      } else if (clientsResponse.error) {
+        console.error('Failed to fetch clients:', clientsResponse.error);
+      }
+
+      if (feeSchedulesResponse.data) {
+        setFeeSchedules(feeSchedulesResponse.data);
+      } else if (feeSchedulesResponse.error) {
+        console.error('Failed to fetch fee schedules:', feeSchedulesResponse.error);
       }
 
       setLoading(false);
     };
 
-    fetchRelationships();
+    fetchData();
   }, [firmId]);
 
   const handleAddRelationship = () => {
@@ -465,6 +499,9 @@ const RelationshipsPage: React.FC = () => {
         onSave={handleSaveRelationship}
         relationship={editingRelationship}
         existingRelationships={relationships}
+        availableHouseholds={households}
+        availableClients={clients}
+        availableFeeSchedules={feeSchedules}
       />
 
       {/* Delete Confirmation Modal */}

@@ -47,7 +47,8 @@
       "Bash(npx supabase start)",
       "Bash(\"src\\pages\\EnhancedBalanceDataPage.tsx\")",
       "Bash(node -e:*)",
-      "Bash(powershell \"Get-Content generated_update_account_names.sql | Select-Object -Last 30\")"
+      "Bash(powershell \"Get-Content generated_update_account_names.sql | Select-Object -Last 30\")",
+      "Bash(node check_duplicate_households.js:*)"
     ],
     "deny": [],
     "ask": []

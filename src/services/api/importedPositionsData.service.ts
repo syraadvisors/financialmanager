@@ -92,30 +92,74 @@ export const importedPositionsDataService = {
     offset?: number
   ): Promise<ApiResponse<ImportedPositionsDataRecord[]>> {
     try {
-      let query = supabase
-        .from('imported_positions_data')
-        .select('*')
-        .eq('firm_id', firmId)
-        .order('as_of_business_date', { ascending: false })
-        .order('account_number', { ascending: true })
-        .order('symbol', { ascending: true });
+      // If limit/offset provided, use them (for specific pagination requests)
+      if (limit || offset) {
+        let query = supabase
+          .from('imported_positions_data')
+          .select('*')
+          .eq('firm_id', firmId)
+          .order('as_of_business_date', { ascending: false })
+          .order('account_number', { ascending: true })
+          .order('symbol', { ascending: true });
 
-      if (limit) {
-        query = query.limit(limit);
+        if (limit) {
+          query = query.limit(limit);
+        }
+
+        if (offset) {
+          query = query.range(offset, offset + (limit || 100) - 1);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+          console.error('Error fetching imported positions data:', error);
+          return { error: error.message };
+        }
+
+        return { data: mapToCamelCase<ImportedPositionsDataRecord[]>(data) || [] };
       }
 
-      if (offset) {
-        query = query.range(offset, offset + (limit || 100) - 1);
+      // Otherwise, fetch all data with automatic pagination (Supabase has 1000-row limit)
+      const PAGE_SIZE = 1000;
+      let allData: any[] = [];
+      let currentPage = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const start = currentPage * PAGE_SIZE;
+        const end = start + PAGE_SIZE - 1;
+
+        const { data, error } = await supabase
+          .from('imported_positions_data')
+          .select('*')
+          .eq('firm_id', firmId)
+          .order('as_of_business_date', { ascending: false })
+          .order('account_number', { ascending: true })
+          .order('symbol', { ascending: true })
+          .range(start, end);
+
+        if (error) {
+          console.error('Error fetching imported positions data:', error);
+          return { error: error.message };
+        }
+
+        if (data && data.length > 0) {
+          allData = allData.concat(data);
+        }
+
+        // If we got less than PAGE_SIZE records, we've reached the end
+        hasMore = data && data.length === PAGE_SIZE;
+        currentPage++;
+
+        // Safety check to prevent infinite loops
+        if (currentPage > 100) {
+          console.warn('[importedPositionsDataService.getAll] Hit safety limit of 100 pages');
+          break;
+        }
       }
 
-      const { data, error } = await query;
-
-      if (error) {
-        console.error('Error fetching imported positions data:', error);
-        return { error: error.message };
-      }
-
-      return { data: mapToCamelCase<ImportedPositionsDataRecord[]>(data) || [] };
+      return { data: mapToCamelCase<ImportedPositionsDataRecord[]>(allData) || [] };
     } catch (err) {
       console.error('Unexpected error fetching imported positions data:', err);
       return { error: 'Failed to fetch imported positions data' };
@@ -476,6 +520,324 @@ export const importedPositionsDataService = {
     } catch (err) {
       console.error('Unexpected error fetching positions data count:', err);
       return { error: 'Failed to fetch positions data count' };
+    }
+  },
+
+  /**
+   * Get summary statistics for positions without loading all records
+   * @param firmId Firm ID
+   * @param asOfDate Optional specific date (defaults to most recent)
+   */
+  async getSummaryStats(
+    firmId: string,
+    asOfDate?: string
+  ): Promise<ApiResponse<{
+    totalPositions: number;
+    totalMarketValue: number;
+    uniqueAccounts: number;
+    asOfBusinessDate: string;
+    securityTypeCounts: { [key: string]: number };
+  }>> {
+    try {
+      // If no date specified, get stats across ALL dates
+      if (!asOfDate || asOfDate === '') {
+        return await this.getSummaryStatsAllDates(firmId);
+      }
+
+      const targetDate = asOfDate;
+
+      // Get the most recent import batch for this date
+      const { data: batchData, error: batchError } = await supabase
+        .from('imported_positions_data')
+        .select('import_batch_id')
+        .eq('firm_id', firmId)
+        .eq('as_of_business_date', targetDate)
+        .order('import_timestamp', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (batchError || !batchData) {
+        return { error: 'No data found for the specified date' };
+      }
+
+      // Get aggregated statistics using SQL
+      const { data, error } = await supabase.rpc('get_positions_summary_stats', {
+        p_firm_id: firmId,
+        p_as_of_date: targetDate,
+        p_batch_id: batchData.import_batch_id
+      });
+
+      if (error) {
+        console.error('[getSummaryStats] RPC error:', error);
+        // Fallback: calculate stats by fetching minimal data
+        return await this.getSummaryStatsFallback(firmId, targetDate, batchData.import_batch_id);
+      }
+
+      return { data: mapToCamelCase(data) };
+    } catch (err) {
+      console.error('Unexpected error fetching summary stats:', err);
+      return { error: 'Failed to fetch summary statistics' };
+    }
+  },
+
+  /**
+   * Fallback method to calculate summary stats if RPC function doesn't exist
+   */
+  async getSummaryStatsFallback(
+    firmId: string,
+    asOfDate: string,
+    batchId: string
+  ): Promise<ApiResponse<{
+    totalPositions: number;
+    totalMarketValue: number;
+    uniqueAccounts: number;
+    asOfBusinessDate: string;
+    securityTypeCounts: { [key: string]: number };
+  }>> {
+    try {
+      // Get total count using Supabase count feature
+      const { count, error: countError } = await supabase
+        .from('imported_positions_data')
+        .select('*', { count: 'exact', head: true })
+        .eq('firm_id', firmId)
+        .eq('as_of_business_date', asOfDate)
+        .eq('import_batch_id', batchId);
+
+      if (countError) {
+        console.error('[getSummaryStatsFallback] Count error:', countError);
+        return { error: countError.message };
+      }
+
+      const totalPositions = count || 0;
+
+      if (totalPositions === 0) {
+        return { error: 'No positions found' };
+      }
+
+      // Fetch ALL records for detailed calculations (account_number, market_value, security_type only)
+      // We need to fetch in batches to avoid Supabase 1000 row limit
+      const batchSize = 1000;
+      let allData: any[] = [];
+      let offset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data: batchData, error: batchError } = await supabase
+          .from('imported_positions_data')
+          .select('account_number, market_value, security_type')
+          .eq('firm_id', firmId)
+          .eq('as_of_business_date', asOfDate)
+          .eq('import_batch_id', batchId)
+          .range(offset, offset + batchSize - 1);
+
+        if (batchError) {
+          console.error('[getSummaryStatsFallback] Batch error:', batchError);
+          return { error: batchError.message };
+        }
+
+        if (batchData && batchData.length > 0) {
+          allData = [...allData, ...batchData];
+          offset += batchSize;
+          hasMore = batchData.length === batchSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      console.log(`[getSummaryStatsFallback] Fetched ${allData.length} records in batches for calculations`);
+
+      // Calculate statistics
+      const uniqueAccounts = new Set(allData.map(r => r.account_number)).size;
+      const totalMarketValue = allData.reduce((sum, r) => sum + (parseFloat(r.market_value) || 0), 0);
+      const securityTypeCounts: { [key: string]: number } = {};
+
+      allData.forEach(r => {
+        const type = r.security_type || 'Unknown';
+        securityTypeCounts[type] = (securityTypeCounts[type] || 0) + 1;
+      });
+
+      return {
+        data: {
+          totalPositions,  // Use the exact count from count query
+          totalMarketValue,
+          uniqueAccounts,
+          asOfBusinessDate: asOfDate,
+          securityTypeCounts
+        }
+      };
+    } catch (err) {
+      console.error('Unexpected error in getSummaryStatsFallback:', err);
+      return { error: 'Failed to calculate summary statistics' };
+    }
+  },
+
+  /**
+   * Get summary statistics across ALL dates (not filtered by date)
+   */
+  async getSummaryStatsAllDates(
+    firmId: string
+  ): Promise<ApiResponse<{
+    totalPositions: number;
+    totalMarketValue: number;
+    uniqueAccounts: number;
+    asOfBusinessDate: string;
+    securityTypeCounts: { [key: string]: number };
+  }>> {
+    try {
+      // Get total count across all dates
+      const { count, error: countError } = await supabase
+        .from('imported_positions_data')
+        .select('*', { count: 'exact', head: true })
+        .eq('firm_id', firmId);
+
+      if (countError) {
+        console.error('[getSummaryStatsAllDates] Count error:', countError);
+        return { error: countError.message };
+      }
+
+      const totalPositions = count || 0;
+
+      if (totalPositions === 0) {
+        return { error: 'No positions found' };
+      }
+
+      // Fetch ALL records across all dates in batches
+      const batchSize = 1000;
+      let allData: any[] = [];
+      let offset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data: batchData, error: batchError } = await supabase
+          .from('imported_positions_data')
+          .select('account_number, market_value, security_type, as_of_business_date')
+          .eq('firm_id', firmId)
+          .range(offset, offset + batchSize - 1);
+
+        if (batchError) {
+          console.error('[getSummaryStatsAllDates] Batch error:', batchError);
+          return { error: batchError.message };
+        }
+
+        if (batchData && batchData.length > 0) {
+          allData = [...allData, ...batchData];
+          offset += batchSize;
+          hasMore = batchData.length === batchSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      console.log(`[getSummaryStatsAllDates] Fetched ${allData.length} records across all dates`);
+
+      // Calculate statistics
+      const uniqueAccounts = new Set(allData.map(r => r.account_number)).size;
+      const totalMarketValue = allData.reduce((sum, r) => sum + (parseFloat(r.market_value) || 0), 0);
+      const securityTypeCounts: { [key: string]: number } = {};
+
+      allData.forEach(r => {
+        const type = r.security_type || 'Unknown';
+        securityTypeCounts[type] = (securityTypeCounts[type] || 0) + 1;
+      });
+
+      return {
+        data: {
+          totalPositions,
+          totalMarketValue,
+          uniqueAccounts,
+          asOfBusinessDate: 'All Dates',
+          securityTypeCounts
+        }
+      };
+    } catch (err) {
+      console.error('Unexpected error in getSummaryStatsAllDates:', err);
+      return { error: 'Failed to calculate summary statistics across all dates' };
+    }
+  },
+
+  /**
+   * Search positions by various criteria
+   * @param firmId Firm ID
+   * @param searchParams Search parameters
+   */
+  async searchPositions(
+    firmId: string,
+    searchParams: {
+      query?: string; // Search across symbol, description, account number
+      accountNumber?: string;
+      symbol?: string;
+      securityType?: string;
+      asOfDate?: string;
+      limit?: number;
+      offset?: number;
+    }
+  ): Promise<ApiResponse<ImportedPositionsDataRecord[]>> {
+    try {
+      const { query, accountNumber, symbol, securityType, asOfDate, limit = 100, offset = 0 } = searchParams;
+
+      // Build query - if no date specified, search across ALL dates
+      let dbQuery = supabase
+        .from('imported_positions_data')
+        .select('*')
+        .eq('firm_id', firmId);
+
+      // If a specific date is provided, filter by that date and its batch
+      if (asOfDate && asOfDate !== '') {
+        // Get the most recent import batch for this date
+        const { data: batchData, error: batchError } = await supabase
+          .from('imported_positions_data')
+          .select('import_batch_id')
+          .eq('firm_id', firmId)
+          .eq('as_of_business_date', asOfDate)
+          .order('import_timestamp', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (batchError || !batchData) {
+          return { error: 'No data found for the specified date' };
+        }
+
+        dbQuery = dbQuery
+          .eq('as_of_business_date', asOfDate)
+          .eq('import_batch_id', batchData.import_batch_id);
+      }
+
+      // Apply specific filters
+      if (accountNumber) {
+        dbQuery = dbQuery.eq('account_number', accountNumber);
+      }
+
+      if (symbol) {
+        dbQuery = dbQuery.ilike('symbol', `%${symbol}%`);
+      }
+
+      if (securityType) {
+        dbQuery = dbQuery.eq('security_type', securityType);
+      }
+
+      // Apply general search query (searches multiple fields)
+      if (query && query.trim()) {
+        dbQuery = dbQuery.or(
+          `symbol.ilike.%${query}%,security_description.ilike.%${query}%,account_number.ilike.%${query}%`
+        );
+      }
+
+      // Apply pagination
+      dbQuery = dbQuery
+        .order('market_value', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      const { data, error } = await dbQuery;
+
+      if (error) {
+        console.error('[searchPositions] Error:', error);
+        return { error: error.message };
+      }
+
+      return { data: mapToCamelCase<ImportedPositionsDataRecord[]>(data) || [] };
+    } catch (err) {
+      console.error('Unexpected error searching positions:', err);
+      return { error: 'Failed to search positions' };
     }
   },
 };

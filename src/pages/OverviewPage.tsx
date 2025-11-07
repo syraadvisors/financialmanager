@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { TrendingUp, DollarSign, Users, AlertCircle } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { DataProcessingErrorFallback } from '../components/ErrorFallbacks';
 import ExportButton from '../components/ExportButton';
+import { accountsService } from '../services/api/accounts.service';
+import { importedBalanceDataService } from '../services/api/importedBalanceData.service';
 
 interface OverviewPageProps {
   onExportData?: (format: 'csv' | 'json' | 'excel') => void;
@@ -11,7 +14,69 @@ interface OverviewPageProps {
 
 const OverviewPage: React.FC<OverviewPageProps> = ({ onExportData }) => {
   const { state } = useAppContext();
-  const { balanceData, positionsData, lastImport } = state;
+  const { userProfile } = useAuth();
+  const { positionsData, lastImport } = state;
+  const [accountCount, setAccountCount] = useState<number>(0);
+  const [loadingAccountCount, setLoadingAccountCount] = useState(true);
+  const [balanceData, setBalanceData] = useState<any[]>([]);
+  const [loadingBalanceData, setLoadingBalanceData] = useState(true);
+
+  // Fetch actual balance data from database
+  useEffect(() => {
+    const fetchBalanceData = async () => {
+      if (!userProfile?.firmId) {
+        setLoadingBalanceData(false);
+        return;
+      }
+
+      setLoadingBalanceData(true);
+      const response = await importedBalanceDataService.getAll(userProfile.firmId);
+
+      if (response.data) {
+        // Get unique accounts (deduplicate by account number, keeping most recent)
+        const accountMap = new Map();
+        response.data.forEach(record => {
+          const existing = accountMap.get(record.accountNumber);
+          if (!existing || new Date(record.importTimestamp || 0) > new Date(existing.importTimestamp || 0)) {
+            accountMap.set(record.accountNumber, record);
+          }
+        });
+        setBalanceData(Array.from(accountMap.values()));
+      } else {
+        console.error('[OverviewPage] Failed to fetch balance data:', response.error);
+        setBalanceData([]);
+      }
+
+      setLoadingBalanceData(false);
+    };
+
+    fetchBalanceData();
+  }, [userProfile?.firmId]);
+
+  // Fetch actual account count from database
+  useEffect(() => {
+    const fetchAccountCount = async () => {
+      if (!userProfile?.firmId) {
+        setLoadingAccountCount(false);
+        return;
+      }
+
+      setLoadingAccountCount(true);
+      const response = await accountsService.getCount(userProfile.firmId);
+
+      if (response.data !== undefined) {
+        setAccountCount(response.data);
+      } else {
+        console.error('[OverviewPage] Failed to fetch account count:', response.error);
+        // Fallback to calculating from imported data if API fails
+        setAccountCount(balanceData.length);
+      }
+
+      setLoadingAccountCount(false);
+    };
+
+    fetchAccountCount();
+  }, [userProfile?.firmId, balanceData.length]);
 
   // Calculate summary statistics
   const totalPortfolioValue = balanceData.reduce((sum, account) =>
@@ -25,11 +90,6 @@ const OverviewPage: React.FC<OverviewPageProps> = ({ onExportData }) => {
   const totalPositionsValue = positionsData.reduce((sum, position) =>
     sum + (parseFloat(position.marketValue?.toString() || '0') || 0), 0
   );
-
-  const uniqueAccounts = new Set([
-    ...balanceData.map(b => b.accountNumber),
-    ...positionsData.map(p => p.accountNumber)
-  ]).size;
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', {
@@ -145,7 +205,7 @@ const OverviewPage: React.FC<OverviewPageProps> = ({ onExportData }) => {
             color: '#333',
             margin: '0 0 8px 0',
           }}>
-            Portfolio Overview
+            Overview
           </h1>
           <p style={{
             fontSize: '16px',
@@ -153,7 +213,7 @@ const OverviewPage: React.FC<OverviewPageProps> = ({ onExportData }) => {
             margin: 0,
           }}>
             {hasData
-              ? `Last updated: ${lastImport.timestamp ? new Date(lastImport.timestamp).toLocaleString() : 'Never'}`
+              ? `Last Import Date/Time: ${lastImport.timestamp ? new Date(lastImport.timestamp).toLocaleString() : 'Never'}`
               : 'Import data to see your portfolio overview'
             }
           </p>
@@ -220,35 +280,19 @@ const OverviewPage: React.FC<OverviewPageProps> = ({ onExportData }) => {
             marginBottom: '32px',
           }}>
             <StatCard
-              title="Total Portfolio Value"
-              value={formatCurrency(totalPortfolioValue)}
+              title="Total AUM"
+              value={loadingBalanceData ? 'Loading...' : formatCurrency(totalPortfolioValue)}
               icon={<DollarSign size={24} />}
               color="#2196f3"
-              subtitle={`From ${balanceData.length} accounts`}
+              subtitle={`Assets under management`}
             />
 
             <StatCard
-              title="Total Cash"
-              value={formatCurrency(totalCash)}
-              icon={<TrendingUp size={24} />}
-              color="#4caf50"
-              subtitle={`${((totalCash / totalPortfolioValue) * 100).toFixed(1)}% of portfolio`}
-            />
-
-            <StatCard
-              title="Positions Value"
-              value={formatCurrency(totalPositionsValue)}
-              icon={<TrendingUp size={24} />}
-              color="#ff9800"
-              subtitle={`${positionsData.length} positions`}
-            />
-
-            <StatCard
-              title="Unique Accounts"
-              value={uniqueAccounts}
+              title="Active Accounts"
+              value={loadingAccountCount ? 'Loading...' : accountCount}
               icon={<Users size={24} />}
               color="#9c27b0"
-              subtitle={`Across both data sets`}
+              subtitle={`Unique client accounts`}
             />
           </div>
 
@@ -293,6 +337,15 @@ const OverviewPage: React.FC<OverviewPageProps> = ({ onExportData }) => {
                   justifyContent: 'space-between',
                   marginBottom: '12px',
                 }}>
+                  <span style={{ color: '#666' }}>Total Portfolio Value:</span>
+                  <strong>{formatCurrency(totalPortfolioValue)}</strong>
+                </div>
+
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  marginBottom: '12px',
+                }}>
                   <span style={{ color: '#666' }}>Average Portfolio Value:</span>
                   <strong>{formatCurrency(totalPortfolioValue / balanceData.length)}</strong>
                 </div>
@@ -300,22 +353,9 @@ const OverviewPage: React.FC<OverviewPageProps> = ({ onExportData }) => {
                 <div style={{
                   display: 'flex',
                   justifyContent: 'space-between',
-                  marginBottom: '16px',
                 }}>
                   <span style={{ color: '#666' }}>Cash Percentage:</span>
                   <strong>{((totalCash / totalPortfolioValue) * 100).toFixed(1)}%</strong>
-                </div>
-
-                <div style={{
-                  padding: '12px',
-                  backgroundColor: '#f5f5f5',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  color: '#666',
-                }}>
-                  Last import: {lastImport.timestamp
-                    ? new Date(lastImport.timestamp).toLocaleString()
-                    : 'Unknown'}
                 </div>
               </div>
             )}
@@ -362,20 +402,9 @@ const OverviewPage: React.FC<OverviewPageProps> = ({ onExportData }) => {
                 <div style={{
                   display: 'flex',
                   justifyContent: 'space-between',
-                  marginBottom: '16px',
                 }}>
                   <span style={{ color: '#666' }}>Average Position Value:</span>
                   <strong>{formatCurrency(totalPositionsValue / positionsData.length)}</strong>
-                </div>
-
-                <div style={{
-                  padding: '12px',
-                  backgroundColor: '#f5f5f5',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  color: '#666',
-                }}>
-                  Security types: {new Set(positionsData.map(p => p.securityType)).size} different types
                 </div>
               </div>
             )}
