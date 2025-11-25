@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Search, Filter, UserCircle, Mail, Phone } from 'lucide-react';
 import { Client, ClientStatus, EntityType, ClientFormData } from '../types/Client';
 import ClientFormModal from './ClientFormModal';
-import { clientsService } from '../services/api/clients.service';
-import { checkSupabaseConnection } from '../lib/supabase';
 import { useFirm } from '../contexts/FirmContext';
+import { useClients, useCreateClient, useUpdateClient, useDeleteClient } from '../hooks/useClients';
+import { showError, showSuccess } from '../utils/toast';
+import LoadingSkeleton from './LoadingSkeleton';
 
 const ClientsPage: React.FC = () => {
   const { firmId, firm, loading: firmLoading } = useFirm();
@@ -12,36 +13,12 @@ const ClientsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<ClientStatus | 'ALL'>('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  // Load clients from Supabase on mount
-  useEffect(() => {
-    loadClients();
-    checkSupabaseConnection();
-  }, []);
-
-  const loadClients = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await clientsService.getAll();
-
-      if (response.error) {
-        setError(response.error);
-        console.error('Error loading clients:', response.error);
-      } else {
-        setClients(response.data || []);
-      }
-    } catch (err) {
-      const errorMsg = 'Failed to load clients';
-      setError(errorMsg);
-      console.error(errorMsg, err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // React Query hooks for data fetching and mutations
+  const { data: clients = [], isLoading: loading, error, refetch } = useClients();
+  const createClient = useCreateClient();
+  const updateClient = useUpdateClient();
+  const deleteClient = useDeleteClient();
 
   const handleAddClient = () => {
     setEditingClient(null);
@@ -55,13 +32,11 @@ const ClientsPage: React.FC = () => {
 
   const handleDeleteClient = async (clientId: string) => {
     if (window.confirm('Are you sure you want to delete this client? This action cannot be undone.')) {
-      const response = await clientsService.delete(clientId);
-
-      if (response.error) {
-        alert('Failed to delete client: ' + response.error);
-      } else {
-        // Reload clients after successful delete
-        await loadClients();
+      try {
+        await deleteClient.mutateAsync(clientId);
+        showSuccess('Client deleted successfully');
+      } catch (err) {
+        showError(err instanceof Error ? err.message : 'Failed to delete client');
       }
     }
   };
@@ -70,38 +45,31 @@ const ClientsPage: React.FC = () => {
     try {
       // Ensure firmId is set for multi-tenant data isolation
       if (!firmId) {
-        alert('Firm ID is not available. Please refresh the page.');
+        showError('Firm ID is not available. Please refresh the page.');
         return;
       }
 
       if (clientData.id) {
         // Edit existing client
-        const response = await clientsService.update(clientData.id, clientData);
-
-        if (response.error) {
-          alert('Failed to update client: ' + response.error);
-          return;
-        }
+        await updateClient.mutateAsync({
+          id: clientData.id,
+          data: clientData,
+        });
+        showSuccess('Client updated successfully');
       } else {
         // Add new client - include firmId for multi-tenant isolation
-        const response = await clientsService.create({
+        await createClient.mutateAsync({
           ...clientData,
           firmId, // Link client to current firm
         });
-
-        if (response.error) {
-          alert('Failed to create client: ' + response.error);
-          return;
-        }
+        showSuccess('Client created successfully');
       }
 
-      // Reload clients after successful save
-      await loadClients();
+      // Modal will close automatically, cache is invalidated by mutation hooks
       setIsModalOpen(false);
       setEditingClient(null);
     } catch (err) {
-      console.error('Error saving client:', err);
-      alert('An unexpected error occurred while saving the client');
+      showError(err instanceof Error ? err.message : 'An unexpected error occurred while saving the client');
     }
   };
 
@@ -110,12 +78,15 @@ const ClientsPage: React.FC = () => {
     setEditingClient(null);
   };
 
-  const filteredClients = clients.filter(client => {
-    const matchesSearch = client.fullLegalName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         client.primaryEmail?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'ALL' || client.clientStatus === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  // Memoize filtered clients to avoid recalculating on every render
+  const filteredClients = useMemo(() => {
+    return clients.filter(client => {
+      const matchesSearch = client.fullLegalName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           client.primaryEmail?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = statusFilter === 'ALL' || client.clientStatus === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [clients, searchTerm, statusFilter]);
 
   const formatCurrency = (value?: number) => {
     if (!value) return '$0';
@@ -282,7 +253,7 @@ const ClientsPage: React.FC = () => {
           borderRadius: '8px',
           border: '1px solid #e0e0e0'
         }}>
-          <p style={{ color: '#666', fontSize: '16px' }}>Loading clients from Supabase...</p>
+          <LoadingSkeleton type="table" />
         </div>
       )}
 
@@ -296,10 +267,10 @@ const ClientsPage: React.FC = () => {
           marginBottom: '20px'
         }}>
           <p style={{ color: '#856404', margin: 0 }}>
-            <strong>Error:</strong> {error}
+            <strong>Error:</strong> {error instanceof Error ? error.message : 'Failed to load clients'}
           </p>
           <button
-            onClick={loadClients}
+            onClick={() => refetch()}
             style={{
               marginTop: '10px',
               padding: '8px 16px',

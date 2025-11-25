@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Plus,
   Edit2,
@@ -14,15 +14,13 @@ import {
 import { Account, AccountStatus, ReconciliationStatus, AccountMismatch, AccountFormData } from '../types/Account';
 import AccountFormModal from './AccountFormModal';
 import { useFirm } from '../contexts/FirmContext';
-import { accountsService } from '../services/api/accounts.service';
-import { masterAccountsService } from '../services/api/masterAccounts.service';
-import { householdsService } from '../services/api/households.service';
-import { clientsService } from '../services/api/clients.service';
-import { feeSchedulesService } from '../services/api/feeSchedules.service';
-import { MasterAccount } from '../types/MasterAccount';
-import { Household } from '../types/Household';
-import { Client } from '../types/Client';
-import { FeeSchedule } from '../types/FeeSchedule';
+import { useAccounts, useCreateAccount, useUpdateAccount } from '../hooks/useAccounts';
+import { useMasterAccounts } from '../hooks/useMasterAccounts';
+import { useHouseholds } from '../hooks/useHouseholds';
+import { useClients } from '../hooks/useClients';
+import { useFeeSchedules } from '../hooks/useFeeSchedules';
+import { showError, showSuccess } from '../utils/toast';
+import LoadingSkeleton from './LoadingSkeleton';
 
 const AccountsPage: React.FC = () => {
   const { firmId } = useFirm();
@@ -36,65 +34,20 @@ const AccountsPage: React.FC = () => {
   const [isAccountFormModalOpen, setIsAccountFormModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [masterAccounts, setMasterAccounts] = useState<MasterAccount[]>([]);
-  const [households, setHouseholds] = useState<Household[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [feeSchedules, setFeeSchedules] = useState<FeeSchedule[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  // Fetch accounts, master accounts, and households from Supabase
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!firmId) return;
+  // React Query hooks for data fetching
+  const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
+  const { data: masterAccounts = [], isLoading: masterAccountsLoading } = useMasterAccounts();
+  const { data: households = [], isLoading: householdsLoading } = useHouseholds();
+  const { data: clients = [], isLoading: clientsLoading } = useClients();
+  const { data: feeSchedules = [], isLoading: feeSchedulesLoading } = useFeeSchedules();
+  
+  // Mutation hooks
+  const createAccount = useCreateAccount();
+  const updateAccount = useUpdateAccount();
 
-      setLoading(true);
-
-      // Fetch accounts
-      const accountsResponse = await accountsService.getAll(firmId);
-      if (accountsResponse.data) {
-        setAccounts(accountsResponse.data);
-      } else if (accountsResponse.error) {
-        console.error('Failed to fetch accounts:', accountsResponse.error);
-      }
-
-      // Fetch master accounts
-      const masterAccountsResponse = await masterAccountsService.getAll(firmId);
-      if (masterAccountsResponse.data) {
-        setMasterAccounts(masterAccountsResponse.data);
-      } else if (masterAccountsResponse.error) {
-        console.error('Failed to fetch master accounts:', masterAccountsResponse.error);
-      }
-
-      // Fetch households
-      const householdsResponse = await householdsService.getAll(firmId);
-      if (householdsResponse.data) {
-        setHouseholds(householdsResponse.data);
-      } else if (householdsResponse.error) {
-        console.error('Failed to fetch households:', householdsResponse.error);
-      }
-
-      // Fetch clients
-      const clientsResponse = await clientsService.getAll();
-      if (clientsResponse.data) {
-        setClients(clientsResponse.data);
-      } else if (clientsResponse.error) {
-        console.error('Failed to fetch clients:', clientsResponse.error);
-      }
-
-      // Fetch fee schedules
-      const feeSchedulesResponse = await feeSchedulesService.getAll(firmId);
-      if (feeSchedulesResponse.data) {
-        setFeeSchedules(feeSchedulesResponse.data);
-      } else if (feeSchedulesResponse.error) {
-        console.error('Failed to fetch fee schedules:', feeSchedulesResponse.error);
-      }
-
-      setLoading(false);
-    };
-
-    fetchData();
-  }, [firmId]);
+  // Combined loading state
+  const loading = accountsLoading || masterAccountsLoading || householdsLoading || clientsLoading || feeSchedulesLoading;
 
   // Transform clients for assignment dropdown (map full_legal_name to name for consistency)
   const availableClients = clients.map(c => ({
@@ -125,42 +78,33 @@ const AccountsPage: React.FC = () => {
   };
 
   const handleSaveAccount = async (accountData: AccountFormData) => {
-    if (!firmId) return;
-
-    if (accountData.id) {
-      // Update existing account
-      const response = await accountsService.update(accountData.id, accountData);
-      if (response.data) {
-        // Refetch all accounts to get the client name populated via join
-        const accountsResponse = await accountsService.getAll(firmId);
-        if (accountsResponse.data) {
-          setAccounts(accountsResponse.data);
-        }
-      } else if (response.error) {
-        console.error('Failed to update account:', response.error);
-        alert('Failed to update account');
-        return;
-      }
-    } else {
-      // Create new account
-      const response = await accountsService.create({
-        ...accountData,
-        firmId,
-      });
-      if (response.data) {
-        // Refetch all accounts to get the client name populated via join
-        const accountsResponse = await accountsService.getAll(firmId);
-        if (accountsResponse.data) {
-          setAccounts(accountsResponse.data);
-        }
-      } else if (response.error) {
-        console.error('Failed to create account:', response.error);
-        alert(`Failed to create account: ${response.error}`);
-        return;
-      }
+    if (!firmId) {
+      showError('Firm ID is not available. Please refresh the page.');
+      return;
     }
-    setIsAccountFormModalOpen(false);
-    setEditingAccount(null);
+
+    try {
+      if (accountData.id) {
+        // Update existing account
+        await updateAccount.mutateAsync({
+          id: accountData.id,
+          data: accountData,
+        });
+        showSuccess('Account updated successfully');
+      } else {
+        // Create new account
+        await createAccount.mutateAsync({
+          ...accountData,
+          firmId,
+        });
+        showSuccess('Account created successfully');
+      }
+      
+      setIsAccountFormModalOpen(false);
+      setEditingAccount(null);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to save account');
+    }
   };
 
   const handleAssignClick = (account: Account) => {
@@ -179,54 +123,44 @@ const AccountsPage: React.FC = () => {
     const selectedClient = availableClients.find(c => c.id === clientId);
     if (!selectedClient) return;
 
-    const response = await accountsService.update(selectedAccount.id, {
-      clientId,
-      clientName: selectedClient.name,
-      reconciliationStatus: ReconciliationStatus.MATCHED,
-      lastReconciledDate: new Date(),
-      reconciliationNotes: `Assigned to ${selectedClient.name} on ${new Date().toLocaleDateString()}`
-    });
-
-    if (response.data) {
-      // Refetch all accounts to get the client name populated via join
-      const accountsResponse = await accountsService.getAll(firmId);
-      if (accountsResponse.data) {
-        setAccounts(accountsResponse.data);
-      }
-    } else if (response.error) {
-      console.error('Failed to assign account:', response.error);
-      alert('Failed to assign account');
-      return;
+    try {
+      await updateAccount.mutateAsync({
+        id: selectedAccount.id,
+        data: {
+          clientId,
+          clientName: selectedClient.name,
+          reconciliationStatus: ReconciliationStatus.MATCHED,
+          lastReconciledDate: new Date(),
+          reconciliationNotes: `Assigned to ${selectedClient.name} on ${new Date().toLocaleDateString()}`
+        }
+      });
+      showSuccess('Account assigned successfully');
+      setIsAssignModalOpen(false);
+      setSelectedAccount(null);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to assign account');
     }
-
-    setIsAssignModalOpen(false);
-    setSelectedAccount(null);
   };
 
   const handleOffboardAccount = async () => {
     if (!selectedAccount || !firmId) return;
 
-    const response = await accountsService.update(selectedAccount.id, {
-      accountStatus: AccountStatus.INACTIVE,
-      reconciliationStatus: ReconciliationStatus.MATCHED,
-      closeDate: new Date(),
-      reconciliationNotes: `Marked inactive on ${new Date().toLocaleDateString()}`
-    });
-
-    if (response.data) {
-      // Refetch all accounts to get the client name populated via join
-      const accountsResponse = await accountsService.getAll(firmId);
-      if (accountsResponse.data) {
-        setAccounts(accountsResponse.data);
-      }
-    } else if (response.error) {
-      console.error('Failed to offboard account:', response.error);
-      alert('Failed to offboard account');
-      return;
+    try {
+      await updateAccount.mutateAsync({
+        id: selectedAccount.id,
+        data: {
+          accountStatus: AccountStatus.INACTIVE,
+          reconciliationStatus: ReconciliationStatus.MATCHED,
+          closeDate: new Date(),
+          reconciliationNotes: `Marked inactive on ${new Date().toLocaleDateString()}`
+        }
+      });
+      showSuccess('Account offboarded successfully');
+      setIsOffboardModalOpen(false);
+      setSelectedAccount(null);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to offboard account');
     }
-
-    setIsOffboardModalOpen(false);
-    setSelectedAccount(null);
   };
 
   const handleLinkAccount = async (accountData: { accountNumber: string; clientId: string }) => {
@@ -235,37 +169,29 @@ const AccountsPage: React.FC = () => {
     const selectedClient = availableClients.find(c => c.id === accountData.clientId);
     if (!selectedClient) return;
 
-    const response = await accountsService.create({
-      firmId,
-      accountNumber: accountData.accountNumber,
-      accountName: `${selectedClient.name} - Linked Account`,
-      accountType: 'Individual' as any,
-      accountStatus: AccountStatus.ACTIVE,
-      clientId: accountData.clientId,
-      clientName: selectedClient.name,
-      custodianAccountId: accountData.accountNumber,
-      registrationName: selectedClient.name,
-      openDate: new Date(),
-      currentBalance: 0,
-      lastImportDate: new Date(),
-      reconciliationStatus: ReconciliationStatus.MATCHED,
-      lastReconciledDate: new Date(),
-      isExcludedFromBilling: false,
-    });
-
-    if (response.data) {
-      // Refetch all accounts to get the client name populated via join
-      const accountsResponse = await accountsService.getAll(firmId);
-      if (accountsResponse.data) {
-        setAccounts(accountsResponse.data);
-      }
-    } else if (response.error) {
-      console.error('Failed to link account:', response.error);
-      alert('Failed to link account');
-      return;
+    try {
+      await createAccount.mutateAsync({
+        firmId,
+        accountNumber: accountData.accountNumber,
+        accountName: `${selectedClient.name} - Linked Account`,
+        accountType: 'Individual' as any,
+        accountStatus: AccountStatus.ACTIVE,
+        clientId: accountData.clientId,
+        clientName: selectedClient.name,
+        custodianAccountId: accountData.accountNumber,
+        registrationName: selectedClient.name,
+        openDate: new Date(),
+        currentBalance: 0,
+        lastImportDate: new Date(),
+        reconciliationStatus: ReconciliationStatus.MATCHED,
+        lastReconciledDate: new Date(),
+        isExcludedFromBilling: false,
+      });
+      showSuccess('Account linked successfully');
+      setIsLinkAccountModalOpen(false);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to link account');
     }
-
-    setIsLinkAccountModalOpen(false);
   };
 
   // Calculate mismatches

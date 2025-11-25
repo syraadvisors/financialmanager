@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X, User, Mail, Phone, MapPin, DollarSign, Calendar, FileText, Building2, TrendingUp, History } from 'lucide-react';
 import { Client } from '../types/Client';
 import RelationshipHierarchy from './RelationshipHierarchy';
@@ -6,6 +6,12 @@ import RelationshipCard from './RelationshipCard';
 import FeeHistoryTable from './FeeHistoryTable';
 import { buildClientHierarchy } from '../utils/hierarchyHelpers';
 import { HouseholdStatus } from '../types/Household';
+import { feeCalculationsService } from '../services/api/feeCalculations.service';
+import { useAccountsByClient } from '../hooks/useAccounts';
+import { useHouseholds } from '../hooks/useHouseholds';
+import { billingPeriodsService } from '../services/api/billingPeriods.service';
+import { useFirm } from '../contexts/FirmContext';
+import LoadingSkeleton from './LoadingSkeleton';
 
 interface EnhancedClientDetailModalProps {
   isOpen: boolean;
@@ -23,6 +29,94 @@ const EnhancedClientDetailModal: React.FC<EnhancedClientDetailModalProps> = ({
   onEdit,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [feeHistory, setFeeHistory] = useState<any[]>([]);
+  const [loadingFeeHistory, setLoadingFeeHistory] = useState(false);
+  const { firmId } = useFirm();
+
+  // Fetch real data
+  const { data: accounts = [], isLoading: loadingAccounts } = useAccountsByClient(client.id);
+  const { data: allHouseholds = [], isLoading: loadingHouseholds } = useHouseholds();
+
+  // Filter households that include this client
+  const relatedHouseholds = useMemo(() => {
+    return allHouseholds
+      .filter((h) => h.associatedClientIds?.includes(client.id) || h.primaryClientId === client.id)
+      .map((h) => ({
+        id: h.id,
+        name: h.householdName,
+        type: 'household' as const,
+        count: h.numberOfAccounts || 0,
+        aum: h.totalAUM || 0,
+        status: h.householdStatus === HouseholdStatus.ACTIVE ? 'Active' : 'Inactive',
+      }));
+  }, [allHouseholds, client.id]);
+
+  // Transform accounts to the format expected by RelationshipCard
+  const relatedAccounts = useMemo(() => {
+    return accounts.map((acc) => ({
+      id: acc.id,
+      name: acc.accountName || acc.accountNumber,
+      type: 'account' as const,
+      details: `Account #${acc.accountNumber}`,
+      aum: acc.currentBalance || 0,
+      status: acc.accountStatus === 'Active' ? 'Active' : (acc.accountStatus || 'Active'),
+    }));
+  }, [accounts]);
+
+  // Fetch fee history
+  useEffect(() => {
+    if (!isOpen || !client.id) return;
+
+    const loadFeeHistory = async () => {
+      setLoadingFeeHistory(true);
+      try {
+        const response = await feeCalculationsService.getHistory(client.id);
+        if (response.data) {
+          // Get billing periods to map period names
+          const periodsResponse = await billingPeriodsService.getAll(firmId || '');
+          const periods = periodsResponse.data || [];
+          const periodMap = new Map(periods.map((p) => [p.id, p]));
+
+          // Transform fee calculations to fee history format
+          const transformedHistory = response.data.map((calc: any) => {
+            // Handle both camelCase (from service) and snake_case (from raw DB) formats
+            const billingPeriodId = calc.billingPeriodId || calc.billing_period_id;
+            const period = periodMap.get(billingPeriodId);
+            return {
+              period: period?.periodName || 'Unknown',
+              periodStart: period?.startDate ? new Date(period.startDate) : new Date(),
+              periodEnd: period?.endDate ? new Date(period.endDate) : new Date(),
+              aum: calc.averageAum || calc.average_aum || 0,
+              feeSchedule: calc.feeScheduleId || calc.fee_schedule_id || 'N/A',
+              feeRate: calc.feeRate || calc.fee_rate || 0,
+              calculatedFee: calc.calculatedFee || calc.calculated_fee || 0,
+              adjustments: calc.adjustments || 0,
+              finalFee: calc.finalFee || calc.final_fee || 0,
+              status: (calc.status || 'calculated') as 'paid' | 'pending' | 'invoiced' | 'calculated',
+              invoiceNumber: calc.invoiceNumber || calc.invoice_number,
+              paidDate: calc.paymentDate ? new Date(calc.paymentDate) : (calc.payment_date ? new Date(calc.payment_date) : undefined),
+            };
+          });
+          setFeeHistory(transformedHistory);
+        } else {
+          setFeeHistory([]);
+        }
+      } catch (error) {
+        console.error('Error loading fee history:', error);
+        setFeeHistory([]);
+      } finally {
+        setLoadingFeeHistory(false);
+      }
+    };
+
+    loadFeeHistory();
+  }, [isOpen, client.id, firmId]);
+
+  // Build hierarchy from real data (simplified - would need relationships service)
+  const hierarchyData = useMemo(() => {
+    const household = allHouseholds.find((h) => h.associatedClientIds?.includes(client.id) || h.primaryClientId === client.id);
+    return buildClientHierarchy(client, household || undefined, undefined, undefined);
+  }, [client, allHouseholds]);
 
   if (!isOpen) return null;
 
@@ -45,140 +139,6 @@ const EnhancedClientDetailModal: React.FC<EnhancedClientDetailModalProps> = ({
     });
   };
 
-  // Build hierarchy using the helper
-  const hierarchyData = buildClientHierarchy(
-    client,
-    {
-      id: 'hh-1',
-      firmId: 'mock-firm-id',
-      householdName: 'Smith Household',
-      householdStatus: HouseholdStatus.ACTIVE,
-      billingAggregationLevel: 'household' as any,
-      numberOfAccounts: 5,
-      totalAUM: 7500000,
-      memberAccountIds: [],
-      associatedClientIds: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-    {
-      id: 'ma-1',
-      masterAccountNumber: 'MA-1001',
-      masterAccountName: 'Master Account 1001',
-      office: 'Main Office',
-      assignedAccountIds: [],
-      numberOfAccounts: 8,
-      totalAUM: 10000000,
-      isActive: true,
-      createdDate: '2023-01-01',
-      lastModifiedDate: '2024-10-01',
-    },
-    {
-      id: 'rel-1',
-      name: 'Smith Family Relationship',
-      totalAccounts: 12,
-      totalAUM: 15000000,
-      status: 'Active',
-    }
-  );
-
-  // Mock related accounts
-  const relatedAccounts = [
-    {
-      id: 'acc-1',
-      name: 'Individual Brokerage',
-      type: 'account' as const,
-      details: 'Account #1234',
-      aum: 1500000,
-      status: 'Active',
-    },
-    {
-      id: 'acc-2',
-      name: 'IRA Traditional',
-      type: 'account' as const,
-      details: 'Account #1235',
-      aum: 750000,
-      status: 'Active',
-    },
-    {
-      id: 'acc-3',
-      name: 'Joint Account',
-      type: 'account' as const,
-      details: 'Account #1236',
-      aum: 250000,
-      status: 'Active',
-    },
-  ];
-
-  // Mock related households
-  const relatedHouseholds = [
-    {
-      id: 'hh-1',
-      name: 'Smith Household',
-      type: 'household' as const,
-      count: 5,
-      aum: 7500000,
-      status: 'Active',
-    },
-  ];
-
-  // Mock fee history data
-  const mockFeeHistory = [
-    {
-      period: 'Q4 2024',
-      periodStart: new Date('2024-10-01'),
-      periodEnd: new Date('2024-12-31'),
-      aum: 2500000,
-      feeSchedule: 'Fee 17',
-      feeRate: 0.0105,
-      calculatedFee: 6562.50,
-      adjustments: 0,
-      finalFee: 6562.50,
-      status: 'calculated' as const,
-    },
-    {
-      period: 'Q3 2024',
-      periodStart: new Date('2024-07-01'),
-      periodEnd: new Date('2024-09-30'),
-      aum: 2450000,
-      feeSchedule: 'Fee 17',
-      feeRate: 0.0105,
-      calculatedFee: 6431.25,
-      adjustments: -50,
-      finalFee: 6381.25,
-      status: 'paid' as const,
-      invoiceNumber: 'INV-2024-0987',
-      paidDate: new Date('2024-10-05'),
-    },
-    {
-      period: 'Q2 2024',
-      periodStart: new Date('2024-04-01'),
-      periodEnd: new Date('2024-06-30'),
-      aum: 2350000,
-      feeSchedule: 'Fee 17',
-      feeRate: 0.0105,
-      calculatedFee: 6168.75,
-      adjustments: 0,
-      finalFee: 6168.75,
-      status: 'paid' as const,
-      invoiceNumber: 'INV-2024-0654',
-      paidDate: new Date('2024-07-08'),
-    },
-    {
-      period: 'Q1 2024',
-      periodStart: new Date('2024-01-01'),
-      periodEnd: new Date('2024-03-31'),
-      aum: 2300000,
-      feeSchedule: 'Fee 17',
-      feeRate: 0.0105,
-      calculatedFee: 6037.50,
-      adjustments: 0,
-      finalFee: 6037.50,
-      status: 'paid' as const,
-      invoiceNumber: 'INV-2024-0321',
-      paidDate: new Date('2024-04-10'),
-    },
-  ];
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: <User size={16} /> },
@@ -330,46 +290,86 @@ const EnhancedClientDetailModal: React.FC<EnhancedClientDetailModalProps> = ({
 
       {/* Related Entities */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-        <RelationshipCard
-          title="Accounts"
-          entities={relatedAccounts}
-          onViewEntity={(id, type) => console.log('View account:', id)}
-          maxDisplay={3}
-        />
+        {loadingAccounts ? (
+          <LoadingSkeleton type="card" />
+        ) : (
+          <RelationshipCard
+            title="Accounts"
+            entities={relatedAccounts}
+            onViewEntity={(id, type) => console.log('View account:', id)}
+            maxDisplay={3}
+          />
+        )}
 
-        <RelationshipCard
-          title="Households"
-          entities={relatedHouseholds}
-          onViewEntity={(id, type) => console.log('View household:', id)}
-          maxDisplay={3}
-        />
+        {loadingHouseholds ? (
+          <LoadingSkeleton type="card" />
+        ) : (
+          <RelationshipCard
+            title="Households"
+            entities={relatedHouseholds}
+            onViewEntity={(id, type) => console.log('View household:', id)}
+            maxDisplay={3}
+          />
+        )}
       </div>
     </div>
   );
 
-  const renderAccounts = () => (
-    <div>
-      <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1a202c', marginBottom: '16px' }}>
-        Account Details
-      </h3>
-      <RelationshipCard
-        title="All Accounts"
-        entities={relatedAccounts}
-        onViewEntity={(id, type) => console.log('View account:', id)}
-        maxDisplay={10}
-      />
-    </div>
-  );
+  const renderAccounts = () => {
+    if (loadingAccounts) {
+      return <LoadingSkeleton type="table" />;
+    }
 
-  const renderFeeHistory = () => (
-    <div>
-      <FeeHistoryTable
-        clientId={client.id}
-        clientName={client.fullLegalName}
-        feeHistory={mockFeeHistory}
-      />
-    </div>
-  );
+    if (relatedAccounts.length === 0) {
+      return (
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#94a3b8' }}>
+          <Building2 size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
+          <p style={{ fontSize: '16px', marginBottom: '8px' }}>No accounts found</p>
+          <p style={{ fontSize: '14px' }}>This client has no associated accounts</p>
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1a202c', marginBottom: '16px' }}>
+          Account Details
+        </h3>
+        <RelationshipCard
+          title="All Accounts"
+          entities={relatedAccounts}
+          onViewEntity={(id, type) => console.log('View account:', id)}
+          maxDisplay={10}
+        />
+      </div>
+    );
+  };
+
+  const renderFeeHistory = () => {
+    if (loadingFeeHistory) {
+      return <LoadingSkeleton type="table" />;
+    }
+
+    if (feeHistory.length === 0) {
+      return (
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#94a3b8' }}>
+          <History size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
+          <p style={{ fontSize: '16px', marginBottom: '8px' }}>No fee history available</p>
+          <p style={{ fontSize: '14px' }}>Fee calculations will appear here once billing periods are processed</p>
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        <FeeHistoryTable
+          clientId={client.id}
+          clientName={client.fullLegalName}
+          feeHistory={feeHistory}
+        />
+      </div>
+    );
+  };
 
   const renderDocuments = () => (
     <div style={{ textAlign: 'center', padding: '60px 20px', color: '#94a3b8' }}>
@@ -547,3 +547,4 @@ const EnhancedClientDetailModal: React.FC<EnhancedClientDetailModalProps> = ({
 };
 
 export default EnhancedClientDetailModal;
+

@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
@@ -8,6 +9,18 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider } from './contexts/AuthContext';
 import EnvironmentErrorScreen from './components/EnvironmentErrorScreen';
 import { validateEnvironment, printEnvironmentInfo } from './utils/envValidation';
+import { queryClient } from './lib/queryClient';
+import { initSentry } from './lib/sentry';
+
+// Initialize Sentry before anything else
+initSentry();
+
+// Lazy load React Query Devtools (development only)
+const LazyReactQueryDevtools = React.lazy(() =>
+  import('@tanstack/react-query-devtools' as any).then((mod: any) => ({
+    default: mod.ReactQueryDevtools,
+  }))
+);
 
 // Validate environment variables before rendering the app
 const validationResult = validateEnvironment();
@@ -33,19 +46,24 @@ if (!validationResult.valid) {
       <ErrorBoundary
         level="page"
         onError={(error, errorInfo) => {
-          // In a production app, you would send this to an error tracking service
+          // Error is already captured by ErrorBoundary's componentDidCatch
+          // This is just for any additional logging if needed
           console.error('Application Error:', error, errorInfo);
-
-          // Optional: Send to error tracking service
-          // Example: Sentry, LogRocket, Bugsnag, etc.
-          // errorTrackingService.captureException(error, { extra: errorInfo });
         }}
       >
-        <BrowserRouter>
-          <AuthProvider>
-            <App />
-          </AuthProvider>
-        </BrowserRouter>
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
+          </BrowserRouter>
+          {/* React Query Devtools - only in development */}
+          {process.env.NODE_ENV === 'development' && (
+            <React.Suspense fallback={null}>
+              <LazyReactQueryDevtools />
+            </React.Suspense>
+          )}
+        </QueryClientProvider>
       </ErrorBoundary>
     </React.StrictMode>
   );

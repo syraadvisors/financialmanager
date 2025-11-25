@@ -29,6 +29,7 @@ import { useImpersonation } from '../contexts/ImpersonationContext';
 import { isSuccessResponse } from '../types/api';
 import { showError, showSuccess } from '../utils/toast';
 import LoadingSkeleton from '../components/LoadingSkeleton';
+import { loggers } from '../utils/logger';
 
 interface SuperAdminStats {
   totalFirms: number;
@@ -40,7 +41,7 @@ interface SuperAdminStats {
 }
 
 const SuperAdminDashboard: React.FC = () => {
-  console.log('[SuperAdminDashboard] Component function called - about to initialize hooks');
+  const logger = loggers.app.child('SuperAdminDashboard');
   const navigate = useNavigate();
   const [stats, setStats] = useState<SuperAdminStats | null>(null);
   const [firms, setFirms] = useState<FirmSettings[]>([]);
@@ -50,9 +51,7 @@ const SuperAdminDashboard: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'overview' | 'firms' | 'users'>('overview');
 
-  console.log('[SuperAdminDashboard] About to call useImpersonation hook');
   const { startImpersonation } = useImpersonation();
-  console.log('[SuperAdminDashboard] useImpersonation hook completed successfully');
 
   useEffect(() => {
     loadData();
@@ -62,36 +61,35 @@ const SuperAdminDashboard: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      console.log('[SuperAdminDashboard] Loading data...');
+      logger.debug('Loading dashboard data');
       const [statsResponse, firmsResponse, usersResponse] = await Promise.all([
         superAdminService.getStats(),
         superAdminService.getAllFirms(),
         superAdminService.getAllUsers()
       ]);
 
-      console.log('[SuperAdminDashboard] Stats response:', statsResponse);
-      console.log('[SuperAdminDashboard] Firms response:', firmsResponse);
-      console.log('[SuperAdminDashboard] Users response:', usersResponse);
-
       if (isSuccessResponse(statsResponse)) {
         setStats(statsResponse.data);
+        logger.debug('Stats loaded successfully');
       } else {
-        console.error('[SuperAdminDashboard] Stats failed:', statsResponse);
+        logger.error('Stats failed', statsResponse);
       }
 
       if (isSuccessResponse(firmsResponse)) {
         setFirms(firmsResponse.data);
+        logger.debug('Firms loaded successfully');
       } else {
-        console.error('[SuperAdminDashboard] Firms failed:', firmsResponse);
+        logger.error('Firms failed', firmsResponse);
       }
 
       if (isSuccessResponse(usersResponse)) {
         setUsers(usersResponse.data);
+        logger.debug('Users loaded successfully');
       } else {
-        console.error('[SuperAdminDashboard] Users failed:', usersResponse);
+        logger.error('Users failed', usersResponse);
       }
     } catch (error: any) {
-      console.error('[SuperAdminDashboard] Load error:', error);
+      logger.error('Load error', error);
       const errorMessage = error.message || 'Failed to load dashboard data';
       setError(errorMessage);
       showError(errorMessage);

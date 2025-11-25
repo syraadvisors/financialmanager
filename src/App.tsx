@@ -21,8 +21,6 @@ import {
   initializeBundleOptimization
 } from './utils/bundleOptimization';
 import { useFinancialAppShortcuts } from './hooks/useKeyboardShortcuts';
-// Temporarily bypass lazy loading to debug
-import SuperAdminDashboardDirect from './pages/SuperAdminDashboard';
 
 // Import marketing pages
 import {
@@ -34,9 +32,6 @@ import {
   SupportPage,
   CompliancePage
 } from './public-pages/pages';
-
-// Debug logging for SuperAdminDashboard import
-console.log('[App] SuperAdminDashboardDirect imported:', SuperAdminDashboardDirect, typeof SuperAdminDashboardDirect);
 
 // Lazy load all page components with enhanced code splitting
 const OverviewPage = createLazyComponent(
@@ -95,9 +90,10 @@ const AppSupportPage = createLazyComponent(
   'AppSupportPage'
 );
 
-// Use the direct import (bypassing lazy loading as it was working)
-const SuperAdminDashboard = SuperAdminDashboardDirect;
-console.log('[App] SuperAdminDashboard component assigned:', SuperAdminDashboard, typeof SuperAdminDashboard);
+const SuperAdminDashboard = createLazyComponent(
+  () => import('./pages/SuperAdminDashboard'),
+  'SuperAdminDashboard'
+);
 
 // Lazy load heavy components that are conditionally rendered
 const CommandPalette = lazy(() => import('./components/CommandPalette'));
@@ -195,7 +191,8 @@ const AppContent: React.FC = () => {
           break;
       }
     } catch (error) {
-      console.error('Export failed:', error);
+      const { loggers } = await import('./utils/logger');
+      loggers.app.error('Export failed', error);
     }
   };
 
@@ -313,9 +310,10 @@ const AppContent: React.FC = () => {
 
 // Root App component with Context Providers and Routing
 const App: React.FC = () => {
-  // TEMPORARY: Fallback firm ID for development until user profile loads
-  // This ensures the app doesn't hang while waiting for auth
-  const TEMP_FALLBACK_FIRM_ID = 'fb5368e4-ea10-48cc-becf-62580dca0895';
+  // Optional: Set defaultFirmId for development/testing
+  // In production, firm ID will come from authenticated user's profile
+  // Set via environment variable or remove for production
+  const defaultFirmId = process.env.REACT_APP_DEFAULT_FIRM_ID || undefined;
 
   return (
     <Routes>
@@ -339,7 +337,7 @@ const App: React.FC = () => {
           <ProtectedRoute>
             <ThemeProvider>
               <AppProvider enablePersistence={true}>
-                <FirmProvider defaultFirmId={TEMP_FALLBACK_FIRM_ID}>
+                <FirmProvider defaultFirmId={defaultFirmId}>
                   <ImpersonationProvider>
                     <SearchProvider>
                       <AppContent />
@@ -358,7 +356,9 @@ const App: React.FC = () => {
         element={
           <ProtectedRoute>
             <ImpersonationProvider>
-              <SuperAdminDashboard />
+              <Suspense fallback={<LoadingSkeleton type="page" />}>
+                <SuperAdminDashboard />
+              </Suspense>
             </ImpersonationProvider>
           </ProtectedRoute>
         }

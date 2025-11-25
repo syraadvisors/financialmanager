@@ -62,7 +62,8 @@ export const FirmProvider: React.FC<FirmProviderProps> = ({
         .single();
 
       if (error) {
-        console.error('Error loading firm:', error);
+        const { loggers } = require('../utils/logger');
+        loggers.app.error('Error loading firm', error);
         return;
       }
 
@@ -77,7 +78,8 @@ export const FirmProvider: React.FC<FirmProviderProps> = ({
         });
       }
     } catch (err) {
-      console.error('Error loading firm:', err);
+      const { loggers } = require('../utils/logger');
+      loggers.app.error('Error loading firm', err);
     } finally {
       setLoading(false);
     }
@@ -99,7 +101,8 @@ export const FirmProvider: React.FC<FirmProviderProps> = ({
       loadFirm(defaultFirmId);
     } else if (userProfile && !userProfile.firmId) {
       // User profile loaded but no firm_id - this is an error state
-      console.error('[FirmContext] User profile loaded but has no firm_id');
+      const { loggers } = require('../utils/logger');
+      loggers.app.error('User profile loaded but has no firm_id');
       setLoading(false);
     }
     // If userProfile is still null, keep loading state until it loads

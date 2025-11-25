@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Plus,
   Edit2,
@@ -12,16 +12,15 @@ import {
   TrendingUp
 } from 'lucide-react';
 import { Relationship, RelationshipStatus, RelationshipFormData } from '../types/Relationship';
-import { Household } from '../types/Household';
-import { Client } from '../types/Client';
-import { FeeSchedule } from '../types/FeeSchedule';
 import RelationshipFormModal from './RelationshipFormModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import { useFirm } from '../contexts/FirmContext';
-import { relationshipsService } from '../services/api/relationships.service';
-import { householdsService } from '../services/api/households.service';
-import { clientsService } from '../services/api/clients.service';
-import { feeSchedulesService } from '../services/api/feeSchedules.service';
+import { useRelationships, useCreateRelationship, useUpdateRelationship, useDeleteRelationship } from '../hooks/useRelationships';
+import { useHouseholds } from '../hooks/useHouseholds';
+import { useClients } from '../hooks/useClients';
+import { useFeeSchedules } from '../hooks/useFeeSchedules';
+import { showError, showSuccess } from '../utils/toast';
+import LoadingSkeleton from './LoadingSkeleton';
 
 const RelationshipsPage: React.FC = () => {
   const { firmId } = useFirm();
@@ -31,56 +30,20 @@ const RelationshipsPage: React.FC = () => {
   const [editingRelationship, setEditingRelationship] = useState<Relationship | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingRelationship, setDeletingRelationship] = useState<Relationship | null>(null);
-  const [relationships, setRelationships] = useState<Relationship[]>([]);
-  const [households, setHouseholds] = useState<Household[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [feeSchedules, setFeeSchedules] = useState<FeeSchedule[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  // Fetch all data from Supabase
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!firmId) return;
+  // React Query hooks for data fetching
+  const { data: relationships = [], isLoading: relationshipsLoading, error: relationshipsError } = useRelationships();
+  const { data: households = [], isLoading: householdsLoading } = useHouseholds();
+  const { data: clients = [], isLoading: clientsLoading } = useClients();
+  const { data: feeSchedules = [], isLoading: feeSchedulesLoading } = useFeeSchedules();
 
-      setLoading(true);
+  // Mutation hooks
+  const createRelationship = useCreateRelationship();
+  const updateRelationship = useUpdateRelationship();
+  const deleteRelationship = useDeleteRelationship();
 
-      // Fetch all data in parallel
-      const [relationshipsResponse, householdsResponse, clientsResponse, feeSchedulesResponse] = await Promise.all([
-        relationshipsService.getAll(firmId),
-        householdsService.getAll(firmId),
-        clientsService.getAll(),
-        feeSchedulesService.getAll(firmId)
-      ]);
-
-      if (relationshipsResponse.data) {
-        setRelationships(relationshipsResponse.data);
-      } else if (relationshipsResponse.error) {
-        console.error('Failed to fetch relationships:', relationshipsResponse.error);
-      }
-
-      if (householdsResponse.data) {
-        setHouseholds(householdsResponse.data);
-      } else if (householdsResponse.error) {
-        console.error('Failed to fetch households:', householdsResponse.error);
-      }
-
-      if (clientsResponse.data) {
-        setClients(clientsResponse.data);
-      } else if (clientsResponse.error) {
-        console.error('Failed to fetch clients:', clientsResponse.error);
-      }
-
-      if (feeSchedulesResponse.data) {
-        setFeeSchedules(feeSchedulesResponse.data);
-      } else if (feeSchedulesResponse.error) {
-        console.error('Failed to fetch fee schedules:', feeSchedulesResponse.error);
-      }
-
-      setLoading(false);
-    };
-
-    fetchData();
-  }, [firmId]);
+  // Combined loading state
+  const loading = relationshipsLoading || householdsLoading || clientsLoading || feeSchedulesLoading;
 
   const handleAddRelationship = () => {
     setEditingRelationship(null);
@@ -103,50 +66,43 @@ const RelationshipsPage: React.FC = () => {
   const confirmDeleteRelationship = async () => {
     if (!deletingRelationship) return;
 
-    const response = await relationshipsService.delete(deletingRelationship.id);
-
-    if (response.error) {
-      console.error('Failed to delete relationship:', response.error);
-      alert('Failed to delete relationship');
-      return;
+    try {
+      await deleteRelationship.mutateAsync(deletingRelationship.id);
+      showSuccess('Relationship deleted successfully');
+      setIsDeleteModalOpen(false);
+      setDeletingRelationship(null);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to delete relationship');
     }
-
-    setRelationships(prev => prev.filter(r => r.id !== deletingRelationship.id));
-    setIsDeleteModalOpen(false);
-    setDeletingRelationship(null);
   };
 
   const handleSaveRelationship = async (relationshipData: RelationshipFormData) => {
-    if (!firmId) return;
-
-    if (relationshipData.id) {
-      // Update existing relationship
-      const response = await relationshipsService.update(relationshipData.id, relationshipData);
-      if (response.data) {
-        setRelationships(prev => prev.map(r =>
-          r.id === relationshipData.id ? response.data! : r
-        ));
-      } else if (response.error) {
-        console.error('Failed to update relationship:', response.error);
-        alert('Failed to update relationship');
-        return;
-      }
-    } else {
-      // Create new relationship
-      const response = await relationshipsService.create({
-        ...relationshipData,
-        firmId,
-      });
-      if (response.data) {
-        setRelationships(prev => [...prev, response.data!]);
-      } else if (response.error) {
-        console.error('Failed to create relationship:', response.error);
-        alert('Failed to create relationship');
-        return;
-      }
+    if (!firmId) {
+      showError('Firm ID is not available. Please refresh the page.');
+      return;
     }
-    setIsModalOpen(false);
-    setEditingRelationship(null);
+
+    try {
+      if (relationshipData.id) {
+        // Update existing relationship
+        await updateRelationship.mutateAsync({
+          id: relationshipData.id,
+          data: relationshipData,
+        });
+        showSuccess('Relationship updated successfully');
+      } else {
+        // Create new relationship
+        await createRelationship.mutateAsync({
+          ...relationshipData,
+          firmId,
+        });
+        showSuccess('Relationship created successfully');
+      }
+      setIsModalOpen(false);
+      setEditingRelationship(null);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to save relationship');
+    }
   };
 
   const handleCloseModal = () => {
@@ -475,7 +431,21 @@ const RelationshipsPage: React.FC = () => {
             textAlign: 'center',
             color: '#999'
           }}>
-            <p style={{ fontSize: '16px' }}>Loading relationships...</p>
+            <LoadingSkeleton type="table" />
+          </div>
+        )}
+
+        {relationshipsError && !loading && (
+          <div style={{
+            padding: '20px',
+            backgroundColor: '#fff3cd',
+            border: '1px solid #ffc107',
+            borderRadius: '8px',
+            marginBottom: '20px'
+          }}>
+            <p style={{ color: '#856404', margin: 0 }}>
+              <strong>Error:</strong> {relationshipsError instanceof Error ? relationshipsError.message : 'Failed to load relationships'}
+            </p>
           </div>
         )}
 

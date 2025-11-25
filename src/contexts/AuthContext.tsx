@@ -2,6 +2,8 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
 import { UserProfile, UserRole, PermissionName } from '../types/User';
+import { loggers } from '../utils/logger';
+import { setSentryUser, clearSentryUser } from '../lib/sentry';
 
 interface AuthContextType {
   user: User | null;
@@ -39,56 +41,79 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [session]);
 
   const loadUserProfile = async (userId: string, sessionToUse?: Session | null) => {
-    console.log('[AuthContext] loadUserProfile starting for userId:', userId);
+    const authLogger = loggers.auth;
+    authLogger.debug('Loading user profile', { userId });
+
+    // Use the session from parameter if provided, otherwise use the ref
+    const currentSession = sessionToUse || sessionRef.current;
+
+    if (!currentSession) {
+      authLogger.error('No session found in ref or parameter');
+      setUserProfile(null);
+      return;
+    }
+
     try {
-      console.log('[AuthContext] Fetching profile via direct REST API...');
+      // Attempt to use Supabase client first
+      // If this hangs, we'll fall back to direct REST API
+      const supabaseQuery = supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
 
-      // WORKAROUND: The Supabase JS client hangs on user_profiles queries for unknown reasons
-      // Even though the database query executes in <1ms in SQL Editor, the JS client hangs for 10s
-      // Solution: Bypass the Supabase JS client and use direct fetch to PostgREST API
+      // Set a timeout to detect if Supabase client hangs
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Supabase query timeout')), 5000);
+      });
 
-      // Use the session from parameter if provided, otherwise use the ref
-      const currentSession = sessionToUse || sessionRef.current;
+      let profileData;
+      try {
+        const result = await Promise.race([
+          supabaseQuery,
+          timeoutPromise
+        ]);
 
-      if (!currentSession) {
-        console.error('[AuthContext] No session found in ref or parameter');
-        setUserProfile(null);
-        return;
-      }
+        // If we get here, the query completed (didn't timeout)
+        const { data, error } = result as { data: any; error: any };
 
-      console.log('[AuthContext] Making direct fetch request...');
-      const response = await fetch(
-        `${supabaseUrl}/rest/v1/user_profiles?id=eq.${userId}&select=*`,
-        {
-          headers: {
-            'apikey': supabaseAnonKey,
-            'Authorization': `Bearer ${currentSession.access_token}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=representation'
-          }
+        if (error) {
+          throw error;
         }
-      );
 
-      console.log('[AuthContext] Fetch response status:', response.status);
+        profileData = data;
+        authLogger.debug('Profile loaded via Supabase client');
+      } catch (supabaseError: any) {
+        // If Supabase client times out or fails, use direct REST API
+        authLogger.warn('Supabase client query failed, using direct REST API', { error: supabaseError.message });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[AuthContext] Fetch error:', response.status, errorText);
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
+        const response = await fetch(
+          `${supabaseUrl}/rest/v1/user_profiles?id=eq.${userId}&select=*`,
+          {
+            headers: {
+              'apikey': supabaseAnonKey,
+              'Authorization': `Bearer ${currentSession.access_token}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=representation'
+            }
+          }
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          authLogger.error('REST API fetch error', { status: response.status, error: errorText });
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+
+        const data = await response.json();
+        profileData = Array.isArray(data) && data.length > 0 ? data[0] : null;
+        authLogger.debug('Profile loaded via REST API');
       }
-
-      const data = await response.json();
-      console.log('[AuthContext] Fetch returned data:', data);
-
-      const profileData = Array.isArray(data) && data.length > 0 ? data[0] : null;
-
-      console.log('[AuthContext] Parsed profile data:', profileData);
 
       if (!profileData) {
-        console.error('[AuthContext] No profile data returned');
+        authLogger.warn('No profile data returned');
         setUserProfile(null);
       } else {
-        console.log('[AuthContext] Setting userProfile:', profileData);
         // Convert snake_case to camelCase and ensure Date objects
         const profile: UserProfile = {
           id: profileData.id,
@@ -111,14 +136,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           updatedAt: new Date(profileData.updated_at)
         };
         setUserProfile(profile);
+        authLogger.info('User profile loaded successfully');
+        
+        // Set Sentry user context
+        setSentryUser({
+          id: profile.id,
+          email: profile.email,
+          username: profile.fullName || undefined,
+          firmId: profile.firmId || undefined,
+        });
       }
     } catch (error) {
-      console.error('[AuthContext] Exception loading user profile:', error);
+      authLogger.error('Exception loading user profile', error);
       // On timeout or exception, try to set minimal profile from auth user
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          console.log('[AuthContext] Setting minimal profile from auth user after exception');
+          authLogger.info('Setting minimal profile from auth user after exception');
           const minimalProfile: UserProfile = {
             id: userId,
             firmId: null,
@@ -140,15 +174,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             updatedAt: user.updated_at ? new Date(user.updated_at) : new Date()
           };
           setUserProfile(minimalProfile);
+          
+          // Set Sentry user context with minimal profile
+          setSentryUser({
+            id: minimalProfile.id,
+            email: minimalProfile.email,
+            username: minimalProfile.fullName || undefined,
+            firmId: minimalProfile.firmId || undefined,
+          });
         } else {
           setUserProfile(null);
+          clearSentryUser();
         }
       } catch (fallbackError) {
-        console.error('[AuthContext] Fallback profile creation also failed:', fallbackError);
+        authLogger.error('Fallback profile creation also failed', fallbackError);
         setUserProfile(null);
       }
     }
-    console.log('[AuthContext] loadUserProfile completed');
   };
 
   // Setup automatic token refresh before expiry
@@ -170,28 +212,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Refresh token 5 minutes before expiry
     const refreshTime = expiresIn - (5 * 60 * 1000);
 
-    console.log('[AuthContext] Session expires at:', expiresAt.toLocaleString());
-    console.log('[AuthContext] Will refresh token in:', Math.floor(refreshTime / 1000 / 60), 'minutes');
+    const authLogger = loggers.auth;
+    authLogger.debug('Session token refresh scheduled', {
+      expiresAt: expiresAt.toLocaleString(),
+      refreshInMinutes: Math.floor(refreshTime / 1000 / 60)
+    });
 
     if (refreshTime > 0) {
       refreshTimerRef.current = setTimeout(async () => {
-        console.log('[AuthContext] Refreshing session token...');
+        authLogger.debug('Refreshing session token');
         try {
           const { data, error } = await supabase.auth.refreshSession();
           if (error) {
-            console.error('[AuthContext] Error refreshing session:', error);
+            authLogger.error('Error refreshing session', error);
             // Mark refresh as failed
             setSessionRefreshFailed(true);
             // Session expired, sign out
             await signOut('expired');
           } else if (data.session) {
-            console.log('[AuthContext] Session refreshed successfully');
+            authLogger.debug('Session refreshed successfully');
             setSessionRefreshFailed(false);
             setSession(data.session);
             setupTokenRefresh(data.session);
           }
         } catch (err) {
-          console.error('[AuthContext] Exception refreshing session:', err);
+          authLogger.error('Exception refreshing session', err);
           setSessionRefreshFailed(true);
           await signOut('error');
         }
@@ -200,12 +245,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Session expires very soon, show warning
       if (!expiryWarningShownRef.current) {
         expiryWarningShownRef.current = true;
-        console.warn('[AuthContext] Session expires in less than 5 minutes');
+        authLogger.warn('Session expires in less than 5 minutes');
 
         // Try immediate refresh
         supabase.auth.refreshSession().then(({ data, error }) => {
           if (error || !data.session) {
-            console.error('[AuthContext] Unable to refresh expiring session');
+            authLogger.error('Unable to refresh expiring session', error);
             setSessionRefreshFailed(true);
           } else {
             expiryWarningShownRef.current = false;
@@ -216,7 +261,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } else {
       // Session already expired
-      console.warn('[AuthContext] Session already expired');
+      authLogger.warn('Session already expired');
       setSessionRefreshFailed(true);
       signOut('expired');
     }
@@ -237,7 +282,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Set new timer
       inactivityTimerRef.current = setTimeout(() => {
-        console.log('[AuthContext] User inactive for 30 minutes, logging out...');
+        loggers.auth.info('User inactive for 30 minutes, logging out');
         signOut('expired');
       }, INACTIVITY_TIMEOUT);
     };
@@ -332,7 +377,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       },
     });
     if (error) {
-      console.error('Error signing in with Google:', error);
+      loggers.auth.error('Error signing in with Google', error);
       throw error;
     }
   };
@@ -350,15 +395,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       inactivityTimerRef.current = null;
     }
 
+    // Clear Sentry user context
+    clearSentryUser();
+
+    const authLogger = loggers.auth;
+    
     // Show appropriate message based on reason
     if (reason === 'expired') {
-      console.log('[AuthContext] Session expired, logging out...');
-      // You could show a toast notification here
+      authLogger.info('Session expired, logging out');
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('logout_reason', 'expired');
       }
     } else if (reason === 'error') {
-      console.log('[AuthContext] Authentication error, logging out...');
+      authLogger.info('Authentication error, logging out');
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('logout_reason', 'error');
       }
@@ -366,7 +415,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { error } = await supabase.auth.signOut();
     if (error) {
-      console.error('Error signing out:', error);
+      authLogger.error('Error signing out', error);
       // Still clear local state even if signOut fails
       setUser(null);
       setSession(null);

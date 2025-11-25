@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Plus,
   Edit2,
@@ -15,15 +15,13 @@ import { Household, HouseholdStatus, BillingAggregationLevel, HouseholdFormData 
 import HouseholdFormModal from './HouseholdFormModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import { useFirm } from '../contexts/FirmContext';
-import { householdsService } from '../services/api/households.service';
-import { accountsService } from '../services/api/accounts.service';
-import { clientsService } from '../services/api/clients.service';
-import { relationshipsService } from '../services/api/relationships.service';
-import { feeSchedulesService } from '../services/api/feeSchedules.service';
-import { Account } from '../types/Account';
-import { Client } from '../types/Client';
-import { Relationship } from '../types/Relationship';
-import { FeeSchedule } from '../types/FeeSchedule';
+import { useHouseholds, useCreateHousehold, useUpdateHousehold, useDeleteHousehold } from '../hooks/useHouseholds';
+import { useAccounts } from '../hooks/useAccounts';
+import { useClients } from '../hooks/useClients';
+import { useRelationships } from '../hooks/useRelationships';
+import { useFeeSchedules } from '../hooks/useFeeSchedules';
+import { showError, showSuccess } from '../utils/toast';
+import LoadingSkeleton from './LoadingSkeleton';
 
 const HouseholdsPage: React.FC = () => {
   const { firmId } = useFirm();
@@ -33,64 +31,21 @@ const HouseholdsPage: React.FC = () => {
   const [editingHousehold, setEditingHousehold] = useState<Household | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingHousehold, setDeletingHousehold] = useState<Household | null>(null);
-  const [households, setHouseholds] = useState<Household[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [relationships, setRelationships] = useState<Relationship[]>([]);
-  const [feeSchedules, setFeeSchedules] = useState<FeeSchedule[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  // Fetch households and accounts from Supabase
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!firmId) return;
+  // React Query hooks for data fetching
+  const { data: households = [], isLoading: householdsLoading, error: householdsError } = useHouseholds();
+  const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
+  const { data: clients = [], isLoading: clientsLoading } = useClients();
+  const { data: relationships = [], isLoading: relationshipsLoading } = useRelationships();
+  const { data: feeSchedules = [], isLoading: feeSchedulesLoading } = useFeeSchedules();
 
-      setLoading(true);
+  // Mutation hooks
+  const createHousehold = useCreateHousehold();
+  const updateHousehold = useUpdateHousehold();
+  const deleteHousehold = useDeleteHousehold();
 
-      // Fetch all data in parallel
-      const [householdsResponse, accountsResponse, clientsResponse, relationshipsResponse, feeSchedulesResponse] = await Promise.all([
-        householdsService.getAll(firmId),
-        accountsService.getAll(firmId),
-        clientsService.getAll(),
-        relationshipsService.getAll(firmId),
-        feeSchedulesService.getAll(firmId)
-      ]);
-
-      if (householdsResponse.data) {
-        setHouseholds(householdsResponse.data);
-      } else if (householdsResponse.error) {
-        console.error('Failed to fetch households:', householdsResponse.error);
-      }
-
-      if (accountsResponse.data) {
-        setAccounts(accountsResponse.data);
-      } else if (accountsResponse.error) {
-        console.error('Failed to fetch accounts:', accountsResponse.error);
-      }
-
-      if (clientsResponse.data) {
-        setClients(clientsResponse.data);
-      } else if (clientsResponse.error) {
-        console.error('Failed to fetch clients:', clientsResponse.error);
-      }
-
-      if (relationshipsResponse.data) {
-        setRelationships(relationshipsResponse.data);
-      } else if (relationshipsResponse.error) {
-        console.error('Failed to fetch relationships:', relationshipsResponse.error);
-      }
-
-      if (feeSchedulesResponse.data) {
-        setFeeSchedules(feeSchedulesResponse.data);
-      } else if (feeSchedulesResponse.error) {
-        console.error('Failed to fetch fee schedules:', feeSchedulesResponse.error);
-      }
-
-      setLoading(false);
-    };
-
-    fetchData();
-  }, [firmId]);
+  // Combined loading state
+  const loading = householdsLoading || accountsLoading || clientsLoading || relationshipsLoading || feeSchedulesLoading;
 
   const handleAddHousehold = () => {
     setEditingHousehold(null);
@@ -113,50 +68,43 @@ const HouseholdsPage: React.FC = () => {
   const confirmDeleteHousehold = async () => {
     if (!deletingHousehold) return;
 
-    const response = await householdsService.delete(deletingHousehold.id);
-
-    if (response.error) {
-      console.error('Failed to delete household:', response.error);
-      alert('Failed to delete household');
-      return;
+    try {
+      await deleteHousehold.mutateAsync(deletingHousehold.id);
+      showSuccess('Household deleted successfully');
+      setIsDeleteModalOpen(false);
+      setDeletingHousehold(null);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to delete household');
     }
-
-    setHouseholds(prev => prev.filter(h => h.id !== deletingHousehold.id));
-    setIsDeleteModalOpen(false);
-    setDeletingHousehold(null);
   };
 
   const handleSaveHousehold = async (householdData: HouseholdFormData) => {
-    if (!firmId) return;
-
-    if (householdData.id) {
-      // Update existing household
-      const response = await householdsService.update(householdData.id, householdData);
-      if (response.data) {
-        setHouseholds(prev => prev.map(h =>
-          h.id === householdData.id ? response.data! : h
-        ));
-      } else if (response.error) {
-        console.error('Failed to update household:', response.error);
-        alert('Failed to update household');
-        return;
-      }
-    } else {
-      // Create new household
-      const response = await householdsService.create({
-        ...householdData,
-        firmId,
-      });
-      if (response.data) {
-        setHouseholds(prev => [...prev, response.data!]);
-      } else if (response.error) {
-        console.error('Failed to create household:', response.error);
-        alert('Failed to create household');
-        return;
-      }
+    if (!firmId) {
+      showError('Firm ID is not available. Please refresh the page.');
+      return;
     }
-    setIsModalOpen(false);
-    setEditingHousehold(null);
+
+    try {
+      if (householdData.id) {
+        // Update existing household
+        await updateHousehold.mutateAsync({
+          id: householdData.id,
+          data: householdData,
+        });
+        showSuccess('Household updated successfully');
+      } else {
+        // Create new household
+        await createHousehold.mutateAsync({
+          ...householdData,
+          firmId,
+        });
+        showSuccess('Household created successfully');
+      }
+      setIsModalOpen(false);
+      setEditingHousehold(null);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to save household');
+    }
   };
 
   const handleCloseModal = () => {
@@ -517,7 +465,21 @@ const HouseholdsPage: React.FC = () => {
             textAlign: 'center',
             color: '#999'
           }}>
-            <p style={{ fontSize: '16px' }}>Loading households...</p>
+            <LoadingSkeleton type="table" />
+          </div>
+        )}
+
+        {householdsError && !loading && (
+          <div style={{
+            padding: '20px',
+            backgroundColor: '#fff3cd',
+            border: '1px solid #ffc107',
+            borderRadius: '8px',
+            marginBottom: '20px'
+          }}>
+            <p style={{ color: '#856404', margin: 0 }}>
+              <strong>Error:</strong> {householdsError instanceof Error ? householdsError.message : 'Failed to load households'}
+            </p>
           </div>
         )}
 
